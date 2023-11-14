@@ -13,6 +13,8 @@ ICE (ISO/C Engine) is a front-end DOS framework written in entirely C99 and runs
 - 3D triangle rasterization
 
 ## TODO:
+- Input handling (keyboard/mouse)
+- File system handling
 - SDL2 implementation
 
 ## License
