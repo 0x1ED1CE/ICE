@@ -23,6 +23,9 @@ ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional
 - Joystick support
 - SDL2 implementation
 
+## Might Do
+- Lua scripting support
+
 ## License
 This software is free to use. You can modify it and redistribute it under the terms of the 
 MIT license. Check [LICENSE](LICENSE) for further details.
