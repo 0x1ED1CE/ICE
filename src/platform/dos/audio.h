@@ -11,7 +11,7 @@
 #include <go32.h>
 #include <dpmi.h>
 
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 2048
 
 #define MAX_SAMPLES 256
 #define MAX_SOURCES 256
@@ -178,6 +178,8 @@ void ice_audio_buffer() {
 
 ice_uint ice_audio_init() {
 	if (dsp_dma_buffer!=NULL) {
+		ice_log((ice_char*)"DMA buffer is already initialized!");
+		
 		return 0;
 	}
 	
@@ -193,17 +195,37 @@ ice_uint ice_audio_init() {
 				port_offset!=7 && 
 				dsp_reset(0x200+(port_offset<<4))
 			) {
+				ice_char msg[256];
+				sprintf(
+					(char *)msg,
+					"Detected Sound Blaster: %X",
+					0x200+(port_offset<<4)
+				);
+				ice_log(msg);
+				
 				break;
 			}
 		}
 		
 		//Sound Blaster not detected
 		if (port_offset==9) {
+			ice_log((ice_char*)"Could not detect Sound Blaster!");
+			
 			return 1;
 		}
 	}
 	
 	{ //Allocate sound buffer
+		{
+			ice_char msg[256];
+			sprintf(
+				(char *)msg,
+				"Allocating DMA with %d bytes",
+				BUFFER_SIZE
+			);
+			ice_log(msg);
+		}
+		
 		_go32_dpmi_seginfo temp_buffer; //Temporary pointer
 		
 		//Assign 32K to DMA Buffer
@@ -230,6 +252,7 @@ ice_uint ice_audio_init() {
 
 		//Check to see if a page boundary is crossed
 		if (page_1!=page_2) {
+			ice_log((ice_char*)"Buffer overlaps page boundary! Reassigning...");
 			//If so, assign another part of memory to the buffer
 			dos_dma_buffer.size=BUFFER_SIZE/16;
 			_go32_dpmi_allocate_dos_memory(&dos_dma_buffer);
@@ -255,6 +278,8 @@ ice_uint ice_audio_init() {
 	}
 	
 	{ //Enable playback
+		ice_log((ice_char*)"Initializing DSP...");
+		
 		dsp_write(0xD1); //DSP-command D1h - Enable speaker
 		dsp_write(0x40); //DSP-command 40h - Set sample frequency
 		dsp_write(225);  //Write time constant
@@ -311,11 +336,17 @@ ice_uint ice_audio_init() {
 
 void ice_audio_deinit() {
 	//Stops DMA-transfer
-	dsp_write(0xD0);
-	dsp_write(0xDA);
+	{
+		ice_log((ice_char*)"Stopping DSP...");
+		
+		dsp_write(0xD0);
+		dsp_write(0xDA);
+	}
 	
 	//Free the memory allocated to the sound buffer
 	if (dsp_dma_buffer!=NULL) {
+		ice_log((ice_char*)"Freeing DMA buffer...");
+		
 		free(dsp_dma_buffer);
 		dsp_dma_buffer=NULL;
 	}
@@ -333,7 +364,7 @@ void ice_audio_deinit() {
 	}
 }
 
-ice_uint ice_audio_sample_new(ice_uint file_id) {
+ice_uint ice_audio_sample_load(ice_uint file_id) {
 	if (samples==NULL) {
 		return 0;
 	}
@@ -361,6 +392,16 @@ ice_uint ice_audio_sample_new(ice_uint file_id) {
 	wav_file=fopen(filename, "rb");
 	
 	if (wav_file==NULL) {
+		{
+			ice_char msg[256];
+			sprintf(
+				(char *)msg,
+				"Failed to load audio sample: %d",
+				file_id
+			);
+			ice_log(msg);
+		}
+		
 		return 0;
 	}
 	

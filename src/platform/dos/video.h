@@ -36,9 +36,7 @@ VESA Super VGA Standard VS911022-8
 11Bh     -        1280x1024    16.8M (8:8:8)
 */
 
-#include <float.h>
 #include <string.h>
-#include <conio.h>
 #include <malloc.h>
 #include <dos.h>
 #include <dpmi.h>
@@ -51,9 +49,12 @@ VESA Super VGA Standard VS911022-8
 #include "lib/etch/etch.h"
 
 #define VIDEO_ADDRESS 0xA0000
-#define VIDEO_MODE    0x110
-#define VIDEO_WIDTH   640
-#define VIDEO_HEIGHT  480
+//#define VIDEO_MODE    0x110
+//#define VIDEO_WIDTH   640
+//#define VIDEO_HEIGHT  480
+#define VIDEO_MODE    0x10D
+#define VIDEO_WIDTH   320
+#define VIDEO_HEIGHT  200
 #define VIDEO_BYTES   2
 
 #define MAX_TEXTURES 256
@@ -206,7 +207,7 @@ int vesa_mode_set(
 		regs.h.al       = 0x3;
 		int86(0x10,&regs,&regs);
 		
-		clrscr();
+		//clrscr();
 		
 		return 0;
 	}
@@ -297,6 +298,14 @@ ice_uint ice_video_texture_load(
 	);
 	
 	if (data==NULL) {
+		ice_char msg[256];
+		sprintf(
+			(char *)msg,
+			"Failed to load texture: %u",
+			file_id
+		);
+		ice_log(msg);
+		
 		return 0;
 	}
 	
@@ -314,7 +323,7 @@ ice_uint ice_video_texture_load(
 	memcpy(
 		textures[texture_id].data,
 		data,
-		width*height*ETCH_BYTES_PER_PIXEL
+		width*height*sizeof(etch_pixel)
 	);
 	
 	stbi_image_free(data);
@@ -356,135 +365,243 @@ void ice_video_texture_clear(
 
 void ice_video_texture_pixel_draw(
 	ice_uint d_texture_id,
-	ice_float d_ax,
-	ice_float d_ay,
-	ice_float c_ar,
-	ice_float c_ag,
-	ice_float c_ab,
-	ice_float c_aa
+	ice_sint d_ax,
+	ice_sint d_ay,
+	ice_char c_ar,
+	ice_char c_ag,
+	ice_char c_ab,
+	ice_char c_aa
 ) {
 	etch_texture_pixel_draw(
 		(etch_uint)d_texture_id,
-		(etch_float)d_ax,
-		(etch_float)d_ay,
-		(etch_float)c_ar,
-		(etch_float)c_ag,
-		(etch_float)c_ab,
-		(etch_float)c_aa
+		(etch_sint_vector2){
+			(etch_sint)d_ax,
+			(etch_sint)d_ay
+		},
+		(etch_pixel){c_ar,c_ag,c_ab,c_aa}
 	);
 }
 
 void ice_video_texture_rectangle_draw(
 	ice_uint d_texture_id,
 	ice_uint s_texture_id,
-	ice_float d_ax,
-	ice_float d_ay,
-	ice_float d_bx,
-	ice_float d_by,
-	ice_float s_ax,
-	ice_float s_ay,
-	ice_float s_bx,
-	ice_float s_by,
-	ice_float c_ar,
-	ice_float c_ag,
-	ice_float c_ab,
-	ice_float c_aa
+	ice_sint d_ax,
+	ice_sint d_ay,
+	ice_sint d_bx,
+	ice_sint d_by,
+	ice_sint s_ax,
+	ice_sint s_ay,
+	ice_sint s_bx,
+	ice_sint s_by,
+	ice_char c_ar,
+	ice_char c_ag,
+	ice_char c_ab,
+	ice_char c_aa
 ) {
 	etch_texture_rectangle_draw(
 		(etch_uint)d_texture_id,
 		(etch_uint)s_texture_id,
-		(etch_float)d_ax,
-		(etch_float)d_ay,
-		(etch_float)d_bx,
-		(etch_float)d_by,
-		(etch_float)s_ax,
-		(etch_float)s_ay,
-		(etch_float)s_bx,
-		(etch_float)s_by,
-		(etch_float)c_ar,
-		(etch_float)c_ag,
-		(etch_float)c_ab,
-		(etch_float)c_aa
+		(etch_sint_vector2){
+			(etch_sint)d_ax,
+			(etch_sint)d_ay
+		},
+		(etch_sint_vector2){
+			(etch_sint)d_bx,
+			(etch_sint)d_by
+		},
+		(etch_sint_vector2){
+			(etch_sint)s_ax,
+			(etch_sint)s_ay
+		},
+		(etch_sint_vector2){
+			(etch_sint)s_bx,
+			(etch_sint)s_by
+		},
+		(etch_pixel){c_ar,c_ag,c_ab,c_aa}
 	);
 }
 
 void ice_video_texture_triangle_draw(
 	ice_uint d_texture_id,
 	ice_uint s_texture_id,
-	ice_float d_ax,
-	ice_float d_ay,
-	ice_float d_az,
-	ice_float d_bx,
-	ice_float d_by,
-	ice_float d_bz,
-	ice_float d_cx,
-	ice_float d_cy,
-	ice_float d_cz,
-	ice_float s_ax,
-	ice_float s_ay,
-	ice_float s_bx,
-	ice_float s_by,
-	ice_float s_cx,
-	ice_float s_cy,
-	ice_float c_ar,
-	ice_float c_ag,
-	ice_float c_ab,
-	ice_float c_aa,
-	ice_float c_br,
-	ice_float c_bg,
-	ice_float c_bb,
-	ice_float c_ba,
-	ice_float c_cr,
-	ice_float c_cg,
-	ice_float c_cb,
-	ice_float c_ca
+	ice_sint d_ax,
+	ice_sint d_ay,
+	ice_sint d_az,
+	ice_sint d_bx,
+	ice_sint d_by,
+	ice_sint d_bz,
+	ice_sint d_cx,
+	ice_sint d_cy,
+	ice_sint d_cz,
+	ice_sint s_ax,
+	ice_sint s_ay,
+	ice_sint s_bx,
+	ice_sint s_by,
+	ice_sint s_cx,
+	ice_sint s_cy,
+	ice_char c_ar,
+	ice_char c_ag,
+	ice_char c_ab,
+	ice_char c_aa,
+	ice_char c_br,
+	ice_char c_bg,
+	ice_char c_bb,
+	ice_char c_ba,
+	ice_char c_cr,
+	ice_char c_cg,
+	ice_char c_cb,
+	ice_char c_ca
 ) {
-	{
-		ice_char message[256];
-		sprintf(
-			message,
-			"%u | %.8X",
-			(unsigned int)s_texture_id,
-			(unsigned int)textures[s_texture_id].data
-		);
-		ice_log(message);
-	}
-	
 	etch_texture_triangle_draw(
 		(etch_uint)d_texture_id,
 		(etch_uint)s_texture_id,
-		(etch_float)d_ax,
-		(etch_float)d_ay,
-		(etch_float)d_az,
-		(etch_float)d_bx,
-		(etch_float)d_by,
-		(etch_float)d_bz,
-		(etch_float)d_cx,
-		(etch_float)d_cy,
-		(etch_float)d_cz,
-		(etch_float)s_ax,
-		(etch_float)s_ay,
-		(etch_float)s_bx,
-		(etch_float)s_by,
-		(etch_float)s_cx,
-		(etch_float)s_cy,
-		(etch_float)c_ar,
-		(etch_float)c_ag,
-		(etch_float)c_ab,
-		(etch_float)c_aa,
-		(etch_float)c_br,
-		(etch_float)c_bg,
-		(etch_float)c_bb,
-		(etch_float)c_ba,
-		(etch_float)c_cr,
-		(etch_float)c_cg,
-		(etch_float)c_cb,
-		(etch_float)c_ca
+		(etch_sint_vector3){
+			(etch_sint)d_ax,
+			(etch_sint)d_ay,
+			(etch_sint)d_az
+		},
+		(etch_sint_vector3){
+			(etch_sint)d_bx,
+			(etch_sint)d_by,
+			(etch_sint)d_bz
+		},
+		(etch_sint_vector3){
+			(etch_sint)d_cx,
+			(etch_sint)d_cy,
+			(etch_sint)d_cz
+		},
+		(etch_sint_vector2){
+			(etch_sint)s_ax,
+			(etch_sint)s_ay
+		},
+		(etch_sint_vector2){
+			(etch_sint)s_bx,
+			(etch_sint)s_by
+		},
+		(etch_sint_vector2){
+			(etch_sint)s_cx,
+			(etch_sint)s_cy
+		},
+		(etch_pixel){c_ar,c_ag,c_ab,c_aa},
+		(etch_pixel){c_br,c_bg,c_bb,c_ba},
+		(etch_pixel){c_cr,c_cg,c_cb,c_ca}
 	);
 }
 
-void ice_video_flush() {
+ice_uint ice_video_vertex_new(
+	ice_uint size
+) {
+	return (ice_uint)etch_vertex_new(
+		(etch_uint)size
+	);
+}
+
+void ice_video_vertex_delete(
+	ice_uint vertex_id
+) {
+	etch_vertex_free(
+		(etch_uint)vertex_id
+	);
+}
+
+ice_uint ice_video_vertex_size_get(
+	ice_uint vertex_id
+) {
+	return (ice_uint)etch_vertex_size_get(
+		(etch_uint)vertex_id
+	);
+}
+
+void ice_video_vertex_set_uint(
+	ice_uint vertex_id,
+	ice_uint index,
+	ice_uint value
+) {
+	etch_vertex_set_uint(
+		(etch_uint)vertex_id,
+		(etch_uint)index,
+		(etch_uint)value
+	);
+}
+
+ice_uint ice_video_vertex_get_uint(
+	ice_uint vertex_id,
+	ice_uint index
+) {
+	return (ice_uint)etch_vertex_get_uint(
+		(etch_uint)vertex_id,
+		(etch_uint)index
+	);
+}
+
+void ice_video_vertex_set_sint(
+	ice_uint vertex_id,
+	ice_uint index,
+	ice_sint value
+) {
+	etch_vertex_set_sint(
+		(etch_uint)vertex_id,
+		(etch_uint)index,
+		(etch_sint)value
+	);
+}
+
+ice_sint ice_video_vertex_get_sint(
+	ice_uint vertex_id,
+	ice_uint index
+) {
+	return (ice_sint)etch_vertex_get_sint(
+		(etch_uint)vertex_id,
+		(etch_uint)index
+	);
+}
+
+void ice_video_vertex_set_real(
+	ice_uint vertex_id,
+	ice_uint index,
+	ice_real value
+) {
+	etch_vertex_set_real(
+		(etch_uint)vertex_id,
+		(etch_uint)index,
+		(etch_real)value
+	);
+}
+
+ice_real ice_video_vertex_get_real(
+	ice_uint vertex_id,
+	ice_uint index
+) {
+	return (ice_real)etch_vertex_get_real(
+		(etch_uint)vertex_id,
+		(etch_uint)index
+	);
+}
+
+void ice_video_vertex_texture_draw(
+	ice_uint d_texture_id,
+	ice_uint s_texture_id,
+	ice_real render_matrix[4][4],
+	ice_uint position_vertex_id,
+	ice_uint texture_vertex_id,
+	ice_uint face_vertex_id
+) {
+	etch_vertex_texture_draw(
+		(etch_uint)d_texture_id,
+		(etch_uint)s_texture_id,
+		(etch_real (*)[4])render_matrix,
+		(etch_uint)position_vertex_id,
+		(etch_uint)texture_vertex_id,
+		(etch_uint)face_vertex_id
+	);
+}
+
+void ice_video_texture_flush() {
 	etch_texture_flush();
+}
+
+void ice_video_vertex_flush() {
+	etch_vertex_flush();
 }
 
 void ice_video_buffer() {
@@ -496,7 +613,7 @@ void ice_video_buffer() {
 	}
 	
 	etch_texture *texture = &textures[0];
-	unsigned char *data   = texture->data;
+	etch_pixel   *data    = texture->data;
 	unsigned short pixel;
 	unsigned int d_index;
 	unsigned int s_index;
@@ -507,12 +624,12 @@ void ice_video_buffer() {
 		i++
 	) {
 		d_index = i*VIDEO_BYTES;
-		s_index = i*ETCH_BYTES_PER_PIXEL;
+		s_index = i;
 		
 		pixel=(unsigned short)
-			((data[s_index]*31/255)<<10)| 
-			((data[s_index+1]*31/255)<<5)| 
-			(data[s_index+2]*31/255);
+			((data[s_index].r*31/255)<<10)| 
+			((data[s_index].g*31/255)<<5)| 
+			(data[s_index].b*31/255);
 		
 		framebuffer[d_index]   = (unsigned char)(pixel&0xFF);
 		framebuffer[d_index+1] = (unsigned char)(pixel>>8);
@@ -531,21 +648,47 @@ ice_uint ice_video_init() {
 	vesa_info_get();
 	
 	if (vesa_mode_set(VIDEO_MODE)) {
+		ice_char msg[256];
+		sprintf(
+			(char *)msg,
+			"Video mode %X is not supported!",
+			VIDEO_MODE
+		);
+		ice_log(msg);
+		
 		return 1;
 	}
 	
-	framebuffer=(unsigned char *)calloc(
-		VIDEO_WIDTH*VIDEO_HEIGHT,
-		VIDEO_BYTES
-	);
+	{
+		ice_char msg[256];
+		sprintf(
+			(char *)msg,
+			"Successfully changed VESA mode to: %X",
+			VIDEO_MODE
+		);
+		ice_log(msg);
+	}
+	
+	{
+		ice_log((ice_char*)"Allocating framebuffer...");
+		
+		framebuffer=(unsigned char *)calloc(
+			VIDEO_WIDTH*VIDEO_HEIGHT,
+			VIDEO_BYTES
+		);
+	}
 	
 	if (framebuffer==NULL) {
+		ice_log((ice_char*)"Failed to allocate framebuffer!");
+		
 		vesa_mode_set(0x000);
 		
 		return 2;
 	}
 	
-	if (etch_texture_init()) {
+	if (etch_texture_init() || etch_vertex_init()) {
+		ice_log((ice_char*)"Failed to initialize etch graphics library!");
+		
 		free(framebuffer);
 		vesa_mode_set(0x000);
 		
@@ -561,7 +704,7 @@ ice_uint ice_video_init() {
 	return 0;
 }
 
-void ice_video_deinit() {
+void ice_video_deinit() {	
 	etch_texture_deinit();
 	
 	if (framebuffer!=NULL) {

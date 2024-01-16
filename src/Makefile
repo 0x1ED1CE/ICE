@@ -1,3 +1,7 @@
+PLATFORM = dos
+BIN      = ../bin/ice
+MAIN     = demos/3d.c
+
 CC=gcc \
 -std=gnu99 \
 -Wall \
@@ -5,9 +9,6 @@ CC=gcc \
 -Wno-attributes \
 -s \
 -O2
-
-PLATFORM = dos
-BIN      = ../bin/ice
 
 ifeq ($(PLATFORM),dos)
 CC=i586-pc-msdosdjgpp-gcc \
@@ -21,35 +22,39 @@ BIN=../bin/ice.exe
 endif
 
 all: \
-	ice.h \
-	main.c \
 	$(PLATFORM).o \
 	etch.o \
 	iso_vm.o \
-	iso_aux.o \
-	api/iso/iso_ice_audio.h \
-	api/iso/iso_ice_video.h \
-	api/iso/iso_ice_clock.h
+	bindings/iso/iso_aux.h \
+	bindings/iso/iso_ice_clock.h \
+	bindings/iso/iso_ice_video.h \
+	bindings/iso/iso_ice_audio.h \
+	bindings/iso/iso_ice_input.h \
+	bindings/iso/iso_ice_cache.h \
+	$(MAIN)
 	
 	$(CC) \
 	-I../src \
-	main.c \
-	$(PLATFORM).o \
+	$(MAIN) \
+	dos.o \
 	etch.o \
 	iso_vm.o -lm \
-	iso_aux.o \
 	-o $(BIN)
 
 dos.o: \
 	ice.h \
-	modules/audio.h \
-	modules/video.h \
 	modules/clock.h \
+	modules/video.h \
+	modules/audio.h \
+	modules/input.h \
+	modules/cache.h \
 	lib/stb/stb_image.h \
-	platform/dos/ice.c \
-	platform/dos/audio.h \
+	platform/dos/clock.h \
 	platform/dos/video.h \
-	platform/dos/clock.h
+	platform/dos/audio.h \
+	platform/dos/input.h \
+	platform/dos/cache.h \
+	platform/dos/ice.c
 	
 	$(CC) \
 	-I../src \
@@ -59,11 +64,11 @@ dos.o: \
 
 etch.o: \
 	lib/etch/etch.h \
-	lib/etch/etch_texture.c
+	lib/etch/etch.c
 	
 	$(CC) \
 	-Ilib/etch \
-	-c lib/etch/etch_texture.c \
+	-c lib/etch/etch.c \
 	-o etch.o
 
 iso_vm.o: \
@@ -75,22 +80,8 @@ iso_vm.o: \
 	-Ilib/iso \
 	-c lib/iso/iso_vm.c
 
-iso_aux.o: \
-	lib/iso/iso.h \
-	lib/iso/iso_vm.h \
-	lib/iso/iso_aux.h \
-	lib/iso/iso_aux.c \
-	
-	$(CC) \
-	-Ilib/iso \
-	-c lib/iso/iso_aux.c
-
 clean:
 	$(RM) \
 	etch.o \
-	dos.o \
 	iso_vm.o \
-	iso_aux.o \
-	iso_ice_audio.o \
-	iso_ice_video.o \
-	iso_ice_clock.o
+	dos.o

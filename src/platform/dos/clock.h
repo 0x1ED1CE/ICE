@@ -12,6 +12,6 @@ void ice_clock_deinit() {
 	clock_init=0;
 }
 
-ice_float ice_clock_get() {
-	return (ice_float)(uclock()-clock_init)/UCLOCKS_PER_SEC;
+ice_real ice_clock_get() {
+	return (ice_real)(uclock()-clock_init)/UCLOCKS_PER_SEC;
 }

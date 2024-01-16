@@ -14,7 +14,7 @@ void ice_audio_flush();
 
 void ice_audio_buffer();
 
-ice_uint ice_audio_sample_new(
+ice_uint ice_audio_sample_load(
 	ice_uint file_id
 );
 

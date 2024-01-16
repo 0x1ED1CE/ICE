@@ -22,19 +22,19 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#ifndef ISO_H
-#define ISO_H
+#include "ice.h"
+#include "lib/iso/iso_vm.h"
 
-#define ISO_VERSION 8
+#ifndef ISO_ICE_CACHE_H
+#define ISO_ICE_CACHE_H
 
-typedef unsigned char iso_char;
-typedef unsigned int  iso_uint;
-typedef signed int    iso_sint;
-typedef float         iso_real;
-typedef union {
-	iso_uint uint;
-	iso_sint sint;
-	iso_real real;
-} iso_word;
+void iso_ice_cache_run(
+	iso_vm *vm
+) {
+	if (vm->INT==ISO_INT_NONE)
+		return;
+	
+	
+}
 
 #endif

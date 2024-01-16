@@ -190,21 +190,9 @@ void iso_vm_jump(
 }
 
 void iso_vm_run(
-	iso_vm *vm,
-	iso_uint step
+	iso_vm *vm
 ) {
-	if (vm->INT)
-		return;
-	
-	/* Registers */
-	
-	iso_uint *INT = &vm->INT;
-	iso_uint *SP  = &vm->SP;
-	
-	/* Working variables */
-	
-	iso_uint A,B,C;
-	iso_char D,E;
+	iso_uint A,B,C,D,E;
 	
 	volatile iso_word G = {0};
 	volatile iso_word H = {0};
@@ -212,8 +200,32 @@ void iso_vm_run(
 	
 	iso_char OP;
 	
-	do {
+	while (vm->INT==ISO_INT_NONE) {
 		switch(OP=iso_vm_fetch(vm)) {
+			case 0x00: //UINT8
+				A = (iso_uint)iso_vm_fetch(vm);
+				
+				for (B=0; B<=A; B++) {
+					iso_vm_push(
+						vm,
+						(iso_uint)iso_vm_fetch(vm)
+					);
+				}
+				
+				break;
+			case 0x03: //UINT32
+				A = (iso_uint)iso_vm_fetch(vm);
+				
+				for (B=0; B<=A; B++) {
+					iso_vm_push(vm,
+						(iso_uint)iso_vm_fetch(vm)<<24|
+						(iso_uint)iso_vm_fetch(vm)<<16|
+						(iso_uint)iso_vm_fetch(vm)<<8|
+						(iso_uint)iso_vm_fetch(vm)
+					);
+				}
+				
+				break;
 			case ISO_OP_INT:
 				A = iso_vm_pop(vm);
 				
@@ -269,11 +281,11 @@ void iso_vm_run(
 				
 				break;
 			case ISO_OP_POS:
-				iso_vm_push(vm,*SP);
+				iso_vm_push(vm,vm->SP);
 				
 				break;
 			case ISO_OP_DUP:
-				A = iso_vm_get(vm,*SP-1);
+				A = iso_vm_get(vm,vm->SP-1);
 				
 				iso_vm_push(vm,A);
 				
@@ -384,16 +396,32 @@ void iso_vm_run(
 				iso_vm_push(vm,A>>B);
 				
 				break;
+			case 0x63: //FIXED32
+				A = iso_vm_fetch(vm); //PRECISION
+				B = iso_vm_fetch(vm); //COUNT
+				
+				for (C=0; C<=B; C++) {
+					G.real = (iso_real)(
+						(iso_sint)iso_vm_fetch(vm)<<24|
+						(iso_sint)iso_vm_fetch(vm)<<16|
+						(iso_sint)iso_vm_fetch(vm)<<8|
+						(iso_sint)iso_vm_fetch(vm)
+					)/(iso_real)(1<<A);
+					
+					iso_vm_push(vm,G.uint);
+				}
+				
+				break;
 			case ISO_OP_FTU:
 				G.uint = iso_vm_pop(vm);
-				H.uint = (iso_uint)G.fp;
+				H.uint = (iso_uint)G.real;
 				
 				iso_vm_push(vm,H.uint);
 				
 				break;
 			case ISO_OP_UTF:
 				G.uint = iso_vm_pop(vm);
-				H.fp   = (iso_float)G.uint;
+				H.real = (iso_real)G.uint;
 				
 				iso_vm_push(vm,H.uint);
 				
@@ -402,34 +430,34 @@ void iso_vm_run(
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
 				
-				iso_vm_push(vm,G.fp==H.fp);
+				iso_vm_push(vm,G.real==H.real);
 				
 				break;
 			case ISO_OP_FNE:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
 				
-				iso_vm_push(vm,G.fp!=H.fp);
+				iso_vm_push(vm,G.real!=H.real);
 				
 				break;
 			case ISO_OP_FLS:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
 				
-				iso_vm_push(vm,G.fp<H.fp);
+				iso_vm_push(vm,G.real<H.real);
 				
 				break;
 			case ISO_OP_FLE:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
 				
-				iso_vm_push(vm,G.fp<=H.fp);
+				iso_vm_push(vm,G.real<=H.real);
 				
 				break;
 			case ISO_OP_FAD:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
-				I.fp   = G.fp+H.fp;
+				I.real = G.real+H.real;
 				
 				iso_vm_push(vm,I.uint);
 				
@@ -437,7 +465,7 @@ void iso_vm_run(
 			case ISO_OP_FSU:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
-				I.fp   = G.fp-H.fp;
+				I.real = G.real-H.real;
 				
 				iso_vm_push(vm,I.uint);
 				
@@ -445,7 +473,7 @@ void iso_vm_run(
 			case ISO_OP_FMU:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
-				I.fp   = G.fp*H.fp;
+				I.real = G.real*H.real;
 				
 				iso_vm_push(vm,I.uint);
 				
@@ -453,7 +481,7 @@ void iso_vm_run(
 			case ISO_OP_FDI:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
-				I.fp   = G.fp/H.fp;
+				I.real = G.real/H.real;
 				
 				iso_vm_push(vm,I.uint);
 				
@@ -461,7 +489,7 @@ void iso_vm_run(
 			case ISO_OP_FPO:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
-				I.fp   = powf(G.fp,H.fp);
+				I.real = powf(G.real,H.real);
 				
 				iso_vm_push(vm,I.uint);
 				
@@ -469,33 +497,81 @@ void iso_vm_run(
 			case ISO_OP_FMO:
 				H.uint = iso_vm_pop(vm);
 				G.uint = iso_vm_pop(vm);
-				I.fp   = fmod(G.fp,H.fp);
+				I.real = fmod(G.real,H.real);
 				
 				iso_vm_push(vm,I.uint);
 				
 				break;
+			case ISO_OP_SIN:
+				G.uint = iso_vm_pop(vm);
+				H.real = sinf(G.real);
+				
+				iso_vm_push(vm,H.uint);
+				
+				break;
+			case ISO_OP_COS:
+				G.uint = iso_vm_pop(vm);
+				H.real = cosf(G.real);
+				
+				iso_vm_push(vm,H.uint);
+				
+				break;
+			case ISO_OP_TAN:
+				G.uint = iso_vm_pop(vm);
+				H.real = tanf(G.real);
+				
+				iso_vm_push(vm,H.uint);
+				
+				break;
+			case ISO_OP_SQR:
+				G.uint = iso_vm_pop(vm);
+				H.real = sqrtf(G.real);
+				
+				iso_vm_push(vm,H.uint);
+				
+				break;
+			case ISO_OP_LOG:
+				G.uint = iso_vm_pop(vm);
+				H.real = logf(G.real);
+				
+				iso_vm_push(vm,H.uint);
+				
+				break;
+			case ISO_OP_EXP:
+				G.uint = iso_vm_pop(vm);
+				H.real = expf(G.real);
+				
+				iso_vm_push(vm,H.uint);
+				
+				break;
 			default:
-				if (OP<=0x0F) {
-					D = iso_vm_fetch(vm);
+				if (OP<=0x0F) { //OTHER UINTS
+					A = (iso_uint)iso_vm_fetch(vm);
 					
-					for (; D>0; D--) {
-						A = 0;
+					for (B=0; B<=A; B++) {
+						C = 0;
 						
-						for (E=0; E<=OP; E++) {
-							B = (iso_uint)iso_vm_fetch(vm);
-							A = (A<<8)|B;
+						for (D=0; D<=(iso_uint)OP; D++) {
+							E = (iso_uint)iso_vm_fetch(vm);
+							C = (C<<8)|E;
+							
+							if (
+								D==(iso_uint)OP || 
+								(D+1)%sizeof(iso_uint)==0
+							) {
+								iso_vm_push(vm,C);
+								C = 0;
+							}
 						}
-						
-						iso_vm_push(vm,A);
 					}
 					
 					break;
+				} else {
+					iso_vm_interrupt(
+						vm,
+						ISO_INT_ILLEGAL_OPERATION<<8|OP
+					);
 				}
-				
-				iso_vm_interrupt(
-					vm,
-					ISO_INT_ILLEGAL_OPERATION
-				);
 		}
-	} while (*INT==ISO_INT_NONE && !step);
+	}
 }

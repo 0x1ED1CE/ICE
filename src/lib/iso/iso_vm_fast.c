@@ -22,6 +22,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/*
+THIS VERSION IS UNSAFE, USE AT YOUR OWN DISCRETION
+*/
+
 #include <math.h>
 
 #include "iso_vm.h"
@@ -100,12 +104,8 @@ void iso_vm_jump(
 }
 
 void iso_vm_run(
-	iso_vm *vm,
-	iso_uint step
+	iso_vm *vm
 ) {
-	if (vm->INT)
-		return;
-	
 	iso_uint INT = vm->INT;
 	iso_uint PC  = vm->PC;
 	iso_uint SP  = vm->SP;
@@ -113,17 +113,37 @@ void iso_vm_run(
 	iso_uint *stack   = vm->stack;
 	iso_char *program = vm->program;
 	
-	iso_uint A,B,C;
-	iso_char D,E;
+	iso_uint A,B,C,D,E;
 	
-	iso_word G = {0};
-	iso_word H = {0};
-	iso_word I = {0};
+	volatile iso_word G = {0};
+	volatile iso_word H = {0};
+	volatile iso_word I = {0};
 	
 	iso_char OP;
 	
-	do {
+	while (INT==ISO_INT_NONE) {
 		switch(OP=program[PC++]) {
+			case 0x00: //UINT8
+				A = (iso_uint)program[PC++];
+				
+				for (B=0; B<=A; B++) {
+					stack[SP++]=(iso_uint)program[PC++];
+				}
+				
+				break;
+			case 0x03: //UINT32
+				A = (iso_uint)program[PC++];
+				
+				for (B=0; B<=A; B++) {
+					stack[SP++]=(
+						(iso_uint)program[PC++]<<24|
+						(iso_uint)program[PC++]<<16|
+						(iso_uint)program[PC++]<<8|
+						(iso_uint)program[PC++]
+					);
+				}
+				
+				break;
 			case ISO_OP_INT:
 				INT = stack[--SP];
 				 
@@ -287,16 +307,32 @@ void iso_vm_run(
 				stack[SP++] = A>>B;
 				
 				break;
+			case 0x63: //FIXED32
+				A = (iso_uint)program[PC++]; //PRECISION
+				B = (iso_uint)program[PC++]; //COUNT
+				
+				for (C=0; C<=B; C++) {
+					G.real = (iso_real)(
+						(iso_sint)program[PC++]<<24|
+						(iso_sint)program[PC++]<<16|
+						(iso_sint)program[PC++]<<8|
+						(iso_sint)program[PC++]
+					)/(iso_real)(1<<A);
+					
+					stack[SP++]=G.uint;
+				}
+				
+				break;
 			case ISO_OP_FTU:
 				G.uint = stack[--SP];
-				H.uint = (iso_uint)G.fp;
+				H.uint = (iso_uint)G.real;
 				
 				stack[SP++] = H.uint;
 				
 				break;
 			case ISO_OP_UTF:
 				G.uint = stack[--SP];
-				H.fp   = (iso_float)G.uint;
+				H.real = (iso_real)G.uint;
 				
 				stack[SP++] = H.uint;
 				
@@ -305,34 +341,34 @@ void iso_vm_run(
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
 				
-				stack[SP++] = G.fp==H.fp;
+				stack[SP++] = G.real==H.real;
 				
 				break;
 			case ISO_OP_FNE:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
 				
-				stack[SP++] = G.fp!=H.fp;
+				stack[SP++] = G.real!=H.real;
 				
 				break;
 			case ISO_OP_FLS:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
 				
-				stack[SP++] = G.fp<H.fp;
+				stack[SP++] = G.real<H.real;
 				
 				break;
 			case ISO_OP_FLE:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
 				
-				stack[SP++] = G.fp<=H.fp;
+				stack[SP++] = G.real<=H.real;
 				
 				break;
 			case ISO_OP_FAD:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
-				I.fp   = G.fp+H.fp;
+				I.real = G.real+H.real;
 				
 				stack[SP++] = I.uint;
 				
@@ -340,7 +376,7 @@ void iso_vm_run(
 			case ISO_OP_FSU:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
-				I.fp   = G.fp-H.fp;
+				I.real = G.real-H.real;
 				
 				stack[SP++] = I.uint;
 				
@@ -348,7 +384,7 @@ void iso_vm_run(
 			case ISO_OP_FMU:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
-				I.fp   = G.fp*H.fp;
+				I.real = G.real*H.real;
 				
 				stack[SP++] = I.uint;
 				
@@ -356,7 +392,7 @@ void iso_vm_run(
 			case ISO_OP_FDI:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
-				I.fp   = G.fp/H.fp;
+				I.real = G.real/H.real;
 				
 				stack[SP++] = I.uint;
 				
@@ -364,7 +400,7 @@ void iso_vm_run(
 			case ISO_OP_FPO:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
-				I.fp   = powf(G.fp,H.fp);
+				I.real = powf(G.real,H.real);
 				
 				stack[SP++] = I.uint;
 				
@@ -372,32 +408,80 @@ void iso_vm_run(
 			case ISO_OP_FMO:
 				H.uint = stack[--SP];
 				G.uint = stack[--SP];
-				I.fp   = fmod(G.fp,H.fp);
+				I.real = fmod(G.real,H.real);
 				
 				stack[SP++] = I.uint;
 				
 				break;
+			case ISO_OP_SIN:
+				G.uint = stack[--SP];
+				H.real = sinf(G.real);
+				
+				stack[SP++] = H.uint;
+				
+				break;
+			case ISO_OP_COS:
+				G.uint = stack[--SP];
+				H.real = cosf(G.real);
+				
+				stack[SP++] = H.uint;
+				
+				break;
+			case ISO_OP_TAN:
+				G.uint = stack[--SP];
+				H.real = tanf(G.real);
+				
+				stack[SP++] = H.uint;
+				
+				break;
+			case ISO_OP_SQR:
+				G.uint = stack[--SP];
+				H.real = sqrtf(G.real);
+				
+				stack[SP++] = H.uint;
+				
+				break;
+			case ISO_OP_LOG:
+				G.uint = stack[--SP];
+				H.real = logf(G.real);
+				
+				stack[SP++] = H.uint;
+				
+				break;
+			case ISO_OP_EXP:
+				G.uint = stack[--SP];
+				H.real = expf(G.real);
+				
+				stack[SP++] = H.uint;
+				
+				break;
 			default:
-				if (OP<=15) {
-					D = program[PC++];
+				if (OP<=15) { //OTHER UINT's
+					D = (iso_uint)program[PC++];
 					
-					for (; D>0; D--) {
+					for (C=0; C<=D; C++) {
 						A = 0;
 						
-						for (E=0; E<OP; E++) {
+						for (E=0; E<=(iso_uint)OP; E++) {
 							B = (iso_uint)program[PC++];
 							A = (A<<8)|B;
+							
+							if (
+								E==(iso_uint)OP || 
+								(E+1)%sizeof(iso_uint)==0
+							) {
+								stack[SP++] = A;
+								A           = 0;
+							}
 						}
-						
-						stack[SP++] = A;
 					}
 					
 					break;
+				} else {
+					INT=ISO_INT_ILLEGAL_OPERATION;
 				}
-				
-				INT=ISO_INT_ILLEGAL_OPERATION;
 		}
-	} while (INT==ISO_INT_NONE && !step);
+	}
 	
 	vm->INT = INT;
 	vm->PC  = PC;
