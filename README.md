@@ -1,7 +1,7 @@
 # ICE
 ![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg) ![VERSION](https://img.shields.io/badge/BUILD-3-blue)
 
-ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO) language.
+ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO) programming language.
 
 ![Graphics Demo](https://i.imgur.com/NrV2MBO.png)
 
@@ -21,13 +21,13 @@ ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional
 - File handling
 - ISO bindings
 - Near clipping
+- Perspective correct texture mapping
 - [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
 - Joystick support
 - SDL2 implementation
 
 ## Might Do
 - Lua scripting support
-- Perspective correct texture mapping
 
 ## How to build
 You will need [DJGPP](https://github.com/andrewwutw/build-djgpp) and gmake to compile.
@@ -36,7 +36,7 @@ You can compile a demo program by running ``make MAIN=demos/<filename>.c`` in th
 
 You can find the examples under [demos](src/demos)
 
-Before running make sure you have [CWSDPMI.EXE](http://sandmann.dotster.com/cwsdpmi/) in the same location as the demo program!
+Before running, make sure you have [CWSDPMI.EXE](http://sandmann.dotster.com/cwsdpmi/) in the same location as the demo program!
 
 ## License
 This software is free to use. You can modify it and redistribute it under the terms of the 
