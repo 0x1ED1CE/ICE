@@ -10,6 +10,8 @@ ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional
 ## 3D Example
 ![3D Demo](https://i.imgur.com/J9VvXu9.gif)
 
+![Miku Demo](https://i.imgur.com/OlQvPnX.gif)
+
 ## Features:
 - SoundBlaster 16 (8 bit unsigned mono audio @ 32KHz)
 - 256 mixed samples
