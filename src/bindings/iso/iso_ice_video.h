@@ -4,17 +4,16 @@
 #ifndef ISO_ICE_VIDEO_H
 #define ISO_ICE_VIDEO_H
 
-#define ISO_INT_VIDEO_BUFFER                 0x2000
-#define ISO_INT_VIDEO_TEXTURE_FLUSH          0x2001
-#define ISO_INT_VIDEO_TEXTURE_NEW            0x2002
-#define ISO_INT_VIDEO_TEXTURE_LOAD           0x2003
-#define ISO_INT_VIDEO_TEXTURE_DELETE         0x2004
-#define ISO_INT_VIDEO_TEXTURE_WIDTH_GET      0x2005
-#define ISO_INT_VIDEO_TEXTURE_HEIGHT_GET     0x2006
-#define ISO_INT_VIDEO_TEXTURE_CLEAR          0x2007
-#define ISO_INT_VIDEO_TEXTURE_PIXEL_DRAW     0x2008
-#define ISO_INT_VIDEO_TEXTURE_RECTANGLE_DRAW 0x2009
-#define ISO_INT_VIDEO_TEXTURE_TRIANGLE_DRAW  0x200A
+#define ISO_INT_VIDEO_TEXTURE_FLUSH          0x2000
+#define ISO_INT_VIDEO_TEXTURE_NEW            0x2001
+#define ISO_INT_VIDEO_TEXTURE_LOAD           0x2002
+#define ISO_INT_VIDEO_TEXTURE_DELETE         0x2003
+#define ISO_INT_VIDEO_TEXTURE_WIDTH_GET      0x2004
+#define ISO_INT_VIDEO_TEXTURE_HEIGHT_GET     0x2005
+#define ISO_INT_VIDEO_TEXTURE_CLEAR          0x2006
+#define ISO_INT_VIDEO_TEXTURE_PIXEL_DRAW     0x2007
+#define ISO_INT_VIDEO_TEXTURE_RECTANGLE_DRAW 0x2008
+#define ISO_INT_VIDEO_TEXTURE_TRIANGLE_DRAW  0x2009
 #define ISO_INT_VIDEO_VERTEX_FLUSH           0x2010
 #define ISO_INT_VIDEO_VERTEX_NEW             0x2011
 #define ISO_INT_VIDEO_VERTEX_DELETE          0x2012
@@ -37,12 +36,6 @@ void iso_ice_video_run(
 	volatile iso_word E;
 	
 	switch(vm->INT) {
-		case ISO_INT_VIDEO_BUFFER:
-			iso_vm_interrupt(vm,ISO_INT_NONE);
-			
-			ice_video_buffer();
-			
-			break;
 		case ISO_INT_VIDEO_TEXTURE_FLUSH:
 			iso_vm_interrupt(vm,ISO_INT_NONE);
 			

@@ -22,7 +22,7 @@ BIN=../bin/ice.exe
 endif
 
 all: \
-	$(PLATFORM).o \
+	$(PLATFORM) \
 	etch.o \
 	iso_vm.o \
 	bindings/iso/iso_aux.h \
@@ -35,13 +35,14 @@ all: \
 	
 	$(CC) \
 	-I../src \
+	-I../src/demos \
 	$(MAIN) \
-	dos.o \
+	ice.o \
 	etch.o \
 	iso_vm.o -lm \
 	-o $(BIN)
 
-dos.o: \
+dos: \
 	ice.h \
 	modules/clock.h \
 	modules/video.h \
@@ -60,7 +61,27 @@ dos.o: \
 	-I../src \
 	-Iplatform/dos \
 	-c platform/dos/ice.c \
-	-o dos.o
+	-o ice.o
+
+sdl:  \
+	ice.h \
+	modules/clock.h \
+	modules/video.h \
+	modules/audio.h \
+	modules/input.h \
+	modules/cache.h \
+	lib/stb/stb_image.h \
+	platform/sdl/clock.h \
+	platform/sdl/video.h \
+	platform/sdl/audio.h \
+	platform/sdl/input.h \
+	platform/sdl/cache.h \
+	platform/sdl/ice.c
+	
+	-I../src \
+	-Iplatform/sdl \
+	-c platform/sdl/ice.c \
+	-o ice.o
 
 etch.o: \
 	lib/etch/etch.h \
@@ -84,4 +105,4 @@ clean:
 	$(RM) \
 	etch.o \
 	iso_vm.o \
-	dos.o
+	ice.o

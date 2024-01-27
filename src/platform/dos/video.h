@@ -323,7 +323,7 @@ ice_uint ice_video_texture_load(
 	memcpy(
 		textures[texture_id].data,
 		data,
-		width*height*sizeof(etch_pixel)
+		width*height*ETCH_PIXEL_SIZE
 	);
 	
 	stbi_image_free(data);
@@ -374,11 +374,12 @@ void ice_video_texture_pixel_draw(
 ) {
 	etch_texture_pixel_draw(
 		(etch_uint)d_texture_id,
-		(etch_sint_vector2){
-			(etch_sint)d_ax,
-			(etch_sint)d_ay
-		},
-		(etch_pixel){c_ar,c_ag,c_ab,c_aa}
+		(etch_sint)d_ax,
+		(etch_sint)d_ay,
+		(etch_char)c_ar,
+		(etch_char)c_ag,
+		(etch_char)c_ab,
+		(etch_char)c_aa
 	);
 }
 
@@ -401,23 +402,18 @@ void ice_video_texture_rectangle_draw(
 	etch_texture_rectangle_draw(
 		(etch_uint)d_texture_id,
 		(etch_uint)s_texture_id,
-		(etch_sint_vector2){
-			(etch_sint)d_ax,
-			(etch_sint)d_ay
-		},
-		(etch_sint_vector2){
-			(etch_sint)d_bx,
-			(etch_sint)d_by
-		},
-		(etch_sint_vector2){
-			(etch_sint)s_ax,
-			(etch_sint)s_ay
-		},
-		(etch_sint_vector2){
-			(etch_sint)s_bx,
-			(etch_sint)s_by
-		},
-		(etch_pixel){c_ar,c_ag,c_ab,c_aa}
+		(etch_sint)d_ax,
+		(etch_sint)d_ay,
+		(etch_sint)d_bx,
+		(etch_sint)d_by,
+		(etch_sint)s_ax,
+		(etch_sint)s_ay,
+		(etch_sint)s_bx,
+		(etch_sint)s_by,
+		(etch_char)c_ar,
+		(etch_char)c_ag,
+		(etch_char)c_ab,
+		(etch_char)c_aa
 	);
 }
 
@@ -455,36 +451,33 @@ void ice_video_texture_triangle_draw(
 	etch_texture_triangle_draw(
 		(etch_uint)d_texture_id,
 		(etch_uint)s_texture_id,
-		(etch_sint_vector3){
-			(etch_sint)d_ax,
-			(etch_sint)d_ay,
-			(etch_sint)d_az
-		},
-		(etch_sint_vector3){
-			(etch_sint)d_bx,
-			(etch_sint)d_by,
-			(etch_sint)d_bz
-		},
-		(etch_sint_vector3){
-			(etch_sint)d_cx,
-			(etch_sint)d_cy,
-			(etch_sint)d_cz
-		},
-		(etch_sint_vector2){
-			(etch_sint)s_ax,
-			(etch_sint)s_ay
-		},
-		(etch_sint_vector2){
-			(etch_sint)s_bx,
-			(etch_sint)s_by
-		},
-		(etch_sint_vector2){
-			(etch_sint)s_cx,
-			(etch_sint)s_cy
-		},
-		(etch_pixel){c_ar,c_ag,c_ab,c_aa},
-		(etch_pixel){c_br,c_bg,c_bb,c_ba},
-		(etch_pixel){c_cr,c_cg,c_cb,c_ca}
+		(etch_sint)d_ax,
+		(etch_sint)d_ay,
+		(etch_sint)d_az,
+		(etch_sint)d_bx,
+		(etch_sint)d_by,
+		(etch_sint)d_bz,
+		(etch_sint)d_cx,
+		(etch_sint)d_cy,
+		(etch_sint)d_cz,
+		(etch_sint)s_ax,
+		(etch_sint)s_ay,
+		(etch_sint)s_bx,
+		(etch_sint)s_by,
+		(etch_sint)s_cx,
+		(etch_sint)s_cy,
+		(etch_char)c_ar,
+		(etch_char)c_ag,
+		(etch_char)c_ab,
+		(etch_char)c_aa,
+		(etch_char)c_br,
+		(etch_char)c_bg,
+		(etch_char)c_bb,
+		(etch_char)c_ba,
+		(etch_char)c_cr,
+		(etch_char)c_cg,
+		(etch_char)c_cb,
+		(etch_char)c_ca
 	);
 }
 
@@ -613,7 +606,7 @@ void ice_video_buffer() {
 	}
 	
 	etch_texture *texture = &textures[0];
-	etch_pixel   *data    = texture->data;
+	etch_char    *data    = texture->data;
 	unsigned short pixel;
 	unsigned int d_index;
 	unsigned int s_index;
@@ -624,12 +617,12 @@ void ice_video_buffer() {
 		i++
 	) {
 		d_index = i*VIDEO_BYTES;
-		s_index = i;
+		s_index = i*ETCH_PIXEL_SIZE;
 		
 		pixel=(unsigned short)
-			((data[s_index].r*31/255)<<10)| 
-			((data[s_index].g*31/255)<<5)| 
-			(data[s_index].b*31/255);
+			((data[s_index]*31/255)<<10)| 
+			((data[s_index+1]*31/255)<<5)| 
+			(data[s_index+2]*31/255);
 		
 		framebuffer[d_index]   = (unsigned char)(pixel&0xFF);
 		framebuffer[d_index+1] = (unsigned char)(pixel>>8);
@@ -706,6 +699,7 @@ ice_uint ice_video_init() {
 
 void ice_video_deinit() {	
 	etch_texture_deinit();
+	etch_vertex_deinit();
 	
 	if (framebuffer!=NULL) {
 		free(framebuffer);

@@ -1,10 +1,12 @@
 #ifndef ETCH_H
 #define ETCH_H
 
-#define ETCH_VERSION 1
+#define ETCH_VERSION 2
 
 #define ETCH_MAX_TEXTURES 256
 #define ETCH_MAX_VERTEXES 256
+
+#define ETCH_PIXEL_SIZE 4
 
 typedef unsigned char etch_char;
 typedef unsigned int  etch_uint;
@@ -18,34 +20,10 @@ typedef union {
 } etch_word;
 
 typedef struct {
-	etch_char r;
-	etch_char g;
-	etch_char b;
-	etch_char a;
-} etch_pixel;
-
-typedef struct {
-	etch_sint x;
-	etch_sint y;
-} etch_sint_vector2;
-
-typedef struct {
-	etch_sint x;
-	etch_sint y;
-	etch_sint z;
-} etch_sint_vector3;
-
-typedef struct {
-	etch_real x;
-	etch_real y;
-	etch_real z;
-} etch_real_vector3;
-
-typedef struct {
-	etch_uint   width;
-	etch_uint   height;
-	etch_pixel *data;
-	etch_sint  *z_data;
+	etch_uint  width;
+	etch_uint  height;
+	etch_char *data;
+	etch_sint *z_data;
 } etch_texture;
 
 typedef struct {
@@ -81,32 +59,61 @@ void etch_texture_clear(
 
 void etch_texture_pixel_draw(
 	etch_uint d_texture_id,
-	etch_sint_vector2 d_a,
-	etch_pixel c_a
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa
 );
 
 void etch_texture_rectangle_draw(
 	etch_uint d_texture_id,
 	etch_uint s_texture_id,
-	etch_sint_vector2 d_a,
-	etch_sint_vector2 d_b,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_pixel c_a
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa
 );
 
 void etch_texture_triangle_draw(
 	etch_uint d_texture_id,
 	etch_uint s_texture_id,
-	etch_sint_vector3 d_a,
-	etch_sint_vector3 d_b,
-	etch_sint_vector3 d_c,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_sint_vector2 s_c,
-	etch_pixel c_a,
-	etch_pixel c_b,
-	etch_pixel c_c
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_az,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint d_bz,
+	etch_sint d_cx,
+	etch_sint d_cy,
+	etch_sint d_cz,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_sint s_cx,
+	etch_sint s_cy,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa,
+	etch_char c_br,
+	etch_char c_bg,
+	etch_char c_bb,
+	etch_char c_ba,
+	etch_char c_cr,
+	etch_char c_cg,
+	etch_char c_cb,
+	etch_char c_ca
 );
 
 void etch_texture_flush();

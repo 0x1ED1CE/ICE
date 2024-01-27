@@ -51,9 +51,9 @@ etch_uint etch_texture_new(
 	
 	texture->width  = width;
 	texture->height = height;
-	texture->data   = (etch_pixel*)calloc(
+	texture->data   = (etch_char *)calloc(
 		texture_size,
-		sizeof(etch_pixel)
+		ETCH_PIXEL_SIZE
 	);
 	
 	if (z_enable) {
@@ -138,14 +138,14 @@ void etch_texture_clear(
 	etch_texture *texture      = &textures[texture_id];
 	etch_uint     texture_size = texture->width*texture->height;
 	
-	etch_pixel *data  = texture->data;
+	etch_char *data   = texture->data;
 	etch_sint *z_data = texture->z_data;
 	
 	if (data!=NULL) {
 		memset(
 			data,
 			0,
-			texture_size*sizeof(etch_pixel)
+			texture_size*ETCH_PIXEL_SIZE
 		);
 	}
 	
@@ -157,22 +157,35 @@ void etch_texture_clear(
 }
 
 static inline void blend(
-	etch_pixel a,
-	etch_pixel b,
-	etch_pixel *c
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa,
+	etch_char c_br,
+	etch_char c_bg,
+	etch_char c_bb,
+	etch_char c_ba,
+	etch_char *c_cr,
+	etch_char *c_cg,
+	etch_char *c_cb,
+	etch_char *c_ca
 ) {
-	etch_sint alpha     = a.a+1;
-	etch_sint inv_alpha = 256-a.a;
-	c->r = (etch_char)((alpha*a.r+inv_alpha*b.r)>>8);
-	c->g = (etch_char)((alpha*a.g+inv_alpha*b.g)>>8);
-	c->b = (etch_char)((alpha*a.b+inv_alpha*b.b)>>8);
-	c->a = (etch_char)((alpha*a.a+inv_alpha*b.a)>>8);
+	etch_sint alpha     = c_aa+1;
+	etch_sint inv_alpha = 256-c_aa;
+	*c_cr = (etch_char)((alpha*c_ar+inv_alpha*c_br)>>8);
+	*c_cg = (etch_char)((alpha*c_ag+inv_alpha*c_bg)>>8);
+	*c_cb = (etch_char)((alpha*c_ab+inv_alpha*c_bb)>>8);
+	*c_ca = (etch_char)((alpha*c_aa+inv_alpha*c_ba)>>8);
 }
 
 void etch_texture_pixel_draw(
 	etch_uint d_texture_id,
-	etch_sint_vector2 d_a,
-	etch_pixel c_a
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa
 ) {
 	if (
 		textures==NULL ||
@@ -183,36 +196,52 @@ void etch_texture_pixel_draw(
 	}
 	
 	etch_texture *d_texture = &textures[d_texture_id];
-	etch_pixel *d_data      = d_texture->data;
+	etch_char *d_data       = d_texture->data;
 	etch_sint d_width       = (etch_sint)d_texture->width;
 	etch_sint d_height      = (etch_sint)d_texture->height;
 	
 	if (
-		d_a.x>=d_width ||
-		d_a.x<0 ||
-		d_a.y>=d_height ||
-		d_a.y<0
+		d_ax>=d_width ||
+		d_ax<0 ||
+		d_ay>=d_height ||
+		d_ay<0
 	) {
 		return;
 	}
 	
-	etch_sint d_index = d_a.y*d_width+d_a.x;
+	etch_sint d_index = (d_ay*d_width+d_ax)*ETCH_PIXEL_SIZE;
 	
 	blend(
-		c_a,
+		c_ar,
+		c_ag,
+		c_ab,
+		c_aa,
 		d_data[d_index],
-		&d_data[d_index]
+		d_data[d_index+1],
+		d_data[d_index+2],
+		d_data[d_index+3],
+		&d_data[d_index],
+		&d_data[d_index+1],
+		&d_data[d_index+2],
+		&d_data[d_index+3]
 	);
 }
 
 void etch_texture_rectangle_draw(
 	etch_uint d_texture_id,
 	etch_uint s_texture_id,
-	etch_sint_vector2 d_a,
-	etch_sint_vector2 d_b,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_pixel c_a
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa
 ) {
 	if (
 		textures==NULL ||
@@ -225,11 +254,11 @@ void etch_texture_rectangle_draw(
 	etch_texture *d_texture = &textures[d_texture_id];
 	etch_texture *s_texture = &textures[s_texture_id];
 	
-	etch_pixel *d_data = d_texture->data;
+	etch_char *d_data  = d_texture->data;
 	etch_sint d_width  = (etch_sint)d_texture->width;
 	etch_sint d_height = (etch_sint)d_texture->height;
 	
-	etch_pixel *s_data = &(etch_pixel){255,255,255,255};
+	etch_char *s_data  = (etch_char[4]){255,255,255,255};
 	etch_sint s_width  = 1;
 	etch_sint s_height = 1;
 	
@@ -242,10 +271,10 @@ void etch_texture_rectangle_draw(
 		s_height = (etch_sint)s_texture->height;
 	}
 	
-	etch_sint min_x = MIN(d_a.x,d_b.x);
-	etch_sint min_y = MIN(d_a.y,d_b.y);
-	etch_sint max_x = MAX(d_a.x,d_b.x);
-	etch_sint max_y = MAX(d_a.y,d_b.y);
+	etch_sint min_x = MIN(d_ax,d_bx);
+	etch_sint min_y = MIN(d_ay,d_by);
+	etch_sint max_x = MAX(d_ax,d_bx);
+	etch_sint max_y = MAX(d_ay,d_by);
 	
 	if (
 		min_x>=d_width ||
@@ -261,40 +290,50 @@ void etch_texture_rectangle_draw(
 	max_x = MIN(max_x,d_width-1);
 	max_y = MIN(max_y,d_height-1);
 	
-	etch_sint scale_x = (s_b.x-s_a.x)*FP/MAX(d_b.x-d_a.x,1);
-	etch_sint scale_y = (s_b.y-s_a.y)*FP/MAX(d_b.y-d_a.y,1);
+	etch_sint scale_x = (s_bx-s_ax)*FP/MAX(d_bx-d_ax,1);
+	etch_sint scale_y = (s_by-s_ay)*FP/MAX(d_by-d_ay,1);
 	etch_sint s_x_1;
-	etch_sint s_y_1 = s_a.y*FP;
+	etch_sint s_y_1 = s_ay*FP;
 	etch_sint d_x;
 	etch_sint d_y;
 	etch_sint s_x;
 	etch_sint s_y;
 	etch_sint d_index;
 	etch_sint s_index;
-	etch_pixel c_b;
+	etch_char c_br;
+	etch_char c_bg;
+	etch_char c_bb;
+	etch_char c_ba;
 	
 	for (d_y=min_y; d_y<=max_y; d_y++) {
 		s_y = (s_y_1/FP)%s_height;
 		
-		s_x_1 = s_a.x*FP;
+		s_x_1 = s_ax*FP;
 		
 		for (d_x=min_x; d_x<=max_x; d_x++) {
 			s_x = (s_x_1/FP)%s_width;
 			
-			d_index = d_y*d_width+d_x;
-			s_index = s_y*s_width+s_x;
+			d_index = (d_y*d_width+d_x)*ETCH_PIXEL_SIZE;
+			s_index = (s_y*s_width+s_x)*ETCH_PIXEL_SIZE;
 			
-			c_b=s_data[s_index];
-			
-			c_b.r = (c_b.r*c_a.r)/255;
-			c_b.g = (c_b.g*c_a.g)/255;
-			c_b.b = (c_b.b*c_a.b)/255;
-			c_b.a = (c_b.a*c_a.a)/255;
+			c_br = (s_data[s_index]*c_ar)/255;
+			c_bg = (s_data[s_index+1]*c_ag)/255;
+			c_bb = (s_data[s_index+2]*c_ab)/255;
+			c_ba = (s_data[s_index+3]*c_aa)/255;
 			
 			blend(
-				c_b,
+				c_br,
+				c_bg,
+				c_bb,
+				c_ba,
 				d_data[d_index],
-				&d_data[d_index]
+				d_data[d_index+1],
+				d_data[d_index+2],
+				d_data[d_index+3],
+				&d_data[d_index],
+				&d_data[d_index+1],
+				&d_data[d_index+2],
+				&d_data[d_index+3]
 			);
 			
 			s_x_1 += scale_x;
@@ -315,25 +354,375 @@ static inline etch_sint determinant(
 	return (by-ay)*(cx-ax)-(bx-ax)*(cy-ay);
 }
 
-void etch_texture_triangle_draw_old(
+static void scan_vector(
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_az,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint d_bz,
+	etch_sint d_cx,
+	etch_sint d_cy,
+	etch_sint d_cz,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_sint s_cx,
+	etch_sint s_cy,
+	etch_sint d_y,
+	etch_sint d_x_1,
+	etch_sint d_x_2,
+	etch_sint *s_x_1,
+	etch_sint *s_y_1,
+	etch_sint *s_slope_x,
+	etch_sint *s_slope_y,
+	etch_sint *d_z_1,
+	etch_sint *d_slope_z
+) {
+	etch_sint u = determinant(d_bx,d_by,d_cx,d_cy,d_x_1,d_y);
+	etch_sint v = determinant(d_cx,d_cy,d_ax,d_ay,d_x_1,d_y);
+	etch_sint w = determinant(d_ax,d_ay,d_bx,d_by,d_x_1,d_y);
+	
+	etch_sint uvw = u+v+w;
+	
+	u = u*FP/uvw;
+	v = v*FP/uvw;
+	w = w*FP/uvw;
+	
+	*s_x_1 = u*s_ax+v*s_bx+w*s_cx;
+	*s_y_1 = u*s_ay+v*s_by+w*s_cy;
+	*d_z_1 = u*d_az+v*d_bz+w*d_cz;
+	
+	u = determinant(d_bx,d_by,d_cx,d_cy,d_x_2,d_y);
+	v = determinant(d_cx,d_cy,d_ax,d_ay,d_x_2,d_y);
+	w = determinant(d_ax,d_ay,d_bx,d_by,d_x_2,d_y);
+	
+	uvw = u+v+w;
+	
+	u = u*FP/uvw;
+	v = v*FP/uvw;
+	w = w*FP/uvw;
+	
+	etch_sint s_x_2 = u*s_ax+v*s_bx+w*s_cx;
+	etch_sint s_y_2 = u*s_ay+v*s_by+w*s_cy;
+	etch_sint d_z_2 = u*d_az+v*d_bz+w*d_cz;
+	
+	etch_sint d_x_d = MAX(d_x_2-d_x_1,1);
+	
+	*s_slope_x = (s_x_2-*s_x_1)/d_x_d;
+	*s_slope_y = (s_y_2-*s_y_1)/d_x_d;
+	*d_slope_z = (d_z_2-*d_z_1)/d_x_d;
+}
+
+static void etch_texture_triangle_top_draw(
+	etch_char *d_data,
+	etch_char *s_data,
+	etch_sint  *d_z_data,
+	etch_sint d_width,
+	etch_sint d_height,
+	etch_sint s_width,
+	etch_sint s_height,
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_az,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint d_bz,
+	etch_sint d_cx,
+	etch_sint d_cy,
+	etch_sint d_cz,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_sint s_cx,
+	etch_sint s_cy,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa,
+	etch_char c_br,
+	etch_char c_bg,
+	etch_char c_bb,
+	etch_char c_ba,
+	etch_char c_cr,
+	etch_char c_cg,
+	etch_char c_cb,
+	etch_char c_ca
+) {
+	if (d_cx<d_bx) {
+		etch_sint temp_sint;
+		etch_char temp_char;
+		
+		temp_sint = d_bx; d_bx = d_cx; d_cx = temp_sint;
+		temp_sint = d_by; d_by = d_cy; d_cy = temp_sint;
+		temp_sint = d_bz; d_bz = d_cz; d_cz = temp_sint;
+		
+		temp_sint = s_bx; s_bx = s_cx; s_cx = temp_sint;
+		temp_sint = s_by; s_by = s_cy; s_cy = temp_sint;
+		
+		temp_char = c_br; c_br = c_cr; c_cr = temp_char;
+		temp_char = c_bg; c_bg = c_cg; c_cg = temp_char;
+		temp_char = c_bb; c_bb = c_cb; c_cb = temp_char;
+		temp_char = c_ba; c_ba = c_ca; c_ca = temp_char;
+	}
+	
+	if (determinant(d_ax,d_ay,d_bx,d_by,d_cx,d_cy)<=0) {
+		return;
+	}
+	
+	etch_sint d_x;
+	etch_sint d_y;
+	etch_sint d_z;
+	etch_sint s_x;
+	etch_sint s_y;
+	etch_uint d_index;
+	etch_uint s_index;
+	etch_sint d_slope_1 = ((d_bx-d_ax)*FP)/(d_by-d_ay);
+	etch_sint d_slope_2 = ((d_cx-d_ax)*FP)/(d_cy-d_ay);
+	etch_sint d_slope_z;
+	etch_sint d_y_1 = MAX(d_ay,0);
+	etch_sint d_y_2 = MIN(d_by,d_height-1);
+	etch_sint d_x_1 = d_ax*FP+d_slope_1*(d_y_1-d_ay);
+	etch_sint d_x_2 = d_ax*FP+d_slope_2*(d_y_1-d_ay);
+	etch_sint d_z_1;
+	etch_sint s_x_1;
+	etch_sint s_y_1;
+	etch_sint s_slope_x;
+	etch_sint s_slope_y;
+	etch_char c_dr;
+	etch_char c_dg;
+	etch_char c_db;
+	etch_char c_da;
+	
+	for (
+		d_y  = d_y_1;
+		d_y <= d_y_2;
+		d_y ++
+	) {
+		d_x = MAX(d_x_1/FP,0);
+		
+		scan_vector(
+			d_ax, d_ay, d_az,
+			d_bx, d_by, d_bz,
+			d_cx, d_cy, d_cz,
+			s_ax, s_ay,
+			s_bx, s_by,
+			s_cx, s_cy,
+			d_y, d_x, d_x_2/FP,
+			&s_x_1, &s_y_1,
+			&s_slope_x, &s_slope_y,
+			&d_z_1,
+			&d_slope_z
+		);
+		
+		for (
+			;
+			d_x <= MIN(d_x_2/FP,d_width-1);
+			d_x ++
+		) {
+			d_z = d_z_1/FP;
+			
+			d_index = (d_y*d_width+d_x);
+			
+			if (d_z<d_z_data[d_index]) {
+				d_z_data[d_index] = d_z;
+				
+				s_x = (s_x_1/FP)%s_width;
+				s_y = (s_y_1/FP)%s_height;
+				
+				d_index *= ETCH_PIXEL_SIZE;
+				s_index = (s_y*s_width+s_x)*ETCH_PIXEL_SIZE;
+				
+				d_data[d_index]   = s_data[s_index];
+				d_data[d_index+1] = s_data[s_index+1];
+				d_data[d_index+2] = s_data[s_index+2];
+				d_data[d_index+3] = s_data[s_index+3];
+			}
+			
+			s_x_1 += s_slope_x;
+			s_y_1 += s_slope_y;
+			d_z_1 += d_slope_z;
+		}
+		
+		d_x_1 += d_slope_1;
+		d_x_2 += d_slope_2;
+	}
+}
+
+static void etch_texture_triangle_bottom_draw(
+	etch_char *d_data,
+	etch_char *s_data,
+	etch_sint  *d_z_data,
+	etch_sint d_width,
+	etch_sint d_height,
+	etch_sint s_width,
+	etch_sint s_height,
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_az,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint d_bz,
+	etch_sint d_cx,
+	etch_sint d_cy,
+	etch_sint d_cz,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_sint s_cx,
+	etch_sint s_cy,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa,
+	etch_char c_br,
+	etch_char c_bg,
+	etch_char c_bb,
+	etch_char c_ba,
+	etch_char c_cr,
+	etch_char c_cg,
+	etch_char c_cb,
+	etch_char c_ca
+) {
+	if (d_cx<d_ax) {
+		etch_sint temp_sint;
+		etch_char temp_char;
+		
+		temp_sint = d_ax; d_ax = d_cx; d_cx = temp_sint;
+		temp_sint = d_ay; d_ay = d_cy; d_cy = temp_sint;
+		temp_sint = d_az; d_az = d_cz; d_cz = temp_sint;
+		
+		temp_sint = s_ax; s_ax = s_cx; s_cx = temp_sint;
+		temp_sint = s_ay; s_ay = s_cy; s_cy = temp_sint;
+		
+		temp_char = c_ar; c_ar = c_cr; c_cr = temp_char;
+		temp_char = c_ag; c_ag = c_cg; c_cg = temp_char;
+		temp_char = c_ab; c_ab = c_cb; c_cb = temp_char;
+		temp_char = c_aa; c_aa = c_ca; c_ca = temp_char;
+	}
+	
+	if (determinant(d_ax,d_ay,d_bx,d_by,d_cx,d_cy)<=0) {
+		return;
+	}
+	
+	etch_sint d_x;
+	etch_sint d_y;
+	etch_sint d_z;
+	etch_sint s_x;
+	etch_sint s_y;
+	etch_uint d_index;
+	etch_uint s_index;
+	etch_sint d_slope_1 = ((d_bx-d_ax)*FP)/(d_by-d_ay);
+	etch_sint d_slope_2 = ((d_bx-d_cx)*FP)/(d_by-d_cy);
+	etch_sint d_slope_z;
+	etch_sint d_y_1 = MIN(d_by,d_height-1);
+	etch_sint d_y_2 = MAX(d_ay,0);
+	etch_sint d_x_1 = d_bx*FP-d_slope_1*(d_by-d_y_1);
+	etch_sint d_x_2 = d_bx*FP-d_slope_2*(d_by-d_y_1);
+	etch_sint d_z_1;
+	etch_sint s_x_1;
+	etch_sint s_y_1;
+	etch_sint s_slope_x;
+	etch_sint s_slope_y;
+	etch_char c_dr;
+	etch_char c_dg;
+	etch_char c_db;
+	etch_char c_da;
+	
+	for (
+		d_y   = d_y_1;
+		d_y  >= d_y_2;
+		d_y --
+	) {
+		d_x = MAX(d_x_1/FP,0);
+		
+		scan_vector(
+			d_ax, d_ay, d_az,
+			d_bx, d_by, d_bz,
+			d_cx, d_cy, d_cz,
+			s_ax, s_ay,
+			s_bx, s_by,
+			s_cx, s_cy,
+			d_y, d_x, d_x_2/FP,
+			&s_x_1, &s_y_1,
+			&s_slope_x, &s_slope_y,
+			&d_z_1,
+			&d_slope_z
+		);
+		
+		for (
+			;
+			d_x <= MIN(d_x_2/FP,d_width-1);
+			d_x ++
+		) {
+			d_z = d_z_1/FP;
+			
+			d_index = (d_y*d_width+d_x);
+			
+			if (d_z<d_z_data[d_index]) {
+				d_z_data[d_index] = d_z;
+				
+				s_x = (s_x_1/FP)%s_width;
+				s_y = (s_y_1/FP)%s_height;
+				
+				d_index *= ETCH_PIXEL_SIZE;
+				s_index = (s_y*s_width+s_x)*ETCH_PIXEL_SIZE;
+				
+				d_data[d_index]   = s_data[s_index];
+				d_data[d_index+1] = s_data[s_index+1];
+				d_data[d_index+2] = s_data[s_index+2];
+				d_data[d_index+3] = s_data[s_index+3];
+			}
+			
+			s_x_1 += s_slope_x;
+			s_y_1 += s_slope_y;
+			d_z_1 += d_slope_z;
+		}
+		
+		d_x_1 -= d_slope_1;
+		d_x_2 -= d_slope_2;
+	}
+}
+
+void etch_texture_triangle_draw(
 	etch_uint d_texture_id,
 	etch_uint s_texture_id,
-	etch_sint_vector3 d_a,
-	etch_sint_vector3 d_b,
-	etch_sint_vector3 d_c,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_sint_vector2 s_c,
-	etch_pixel c_a,
-	etch_pixel c_b,
-	etch_pixel c_c
+	etch_sint d_ax,
+	etch_sint d_ay,
+	etch_sint d_az,
+	etch_sint d_bx,
+	etch_sint d_by,
+	etch_sint d_bz,
+	etch_sint d_cx,
+	etch_sint d_cy,
+	etch_sint d_cz,
+	etch_sint s_ax,
+	etch_sint s_ay,
+	etch_sint s_bx,
+	etch_sint s_by,
+	etch_sint s_cx,
+	etch_sint s_cy,
+	etch_char c_ar,
+	etch_char c_ag,
+	etch_char c_ab,
+	etch_char c_aa,
+	etch_char c_br,
+	etch_char c_bg,
+	etch_char c_bb,
+	etch_char c_ba,
+	etch_char c_cr,
+	etch_char c_cg,
+	etch_char c_cb,
+	etch_char c_ca
 ) {
 	if (
+		determinant(d_ax,d_ay,d_bx,d_by,d_cx,d_cy)<=0 ||
 		textures==NULL ||
 		d_texture_id>=ETCH_MAX_TEXTURES ||
-		//textures[d_texture_id].data==NULL ||
-		textures[d_texture_id].z_data==NULL ||
-		determinant(d_a.x,d_a.y,d_b.x,d_b.y,d_c.x,d_c.y)<=0
+		textures[d_texture_id].z_data==NULL
 	) {
 		return;
 	}
@@ -341,12 +730,12 @@ void etch_texture_triangle_draw_old(
 	etch_texture *d_texture = &textures[d_texture_id];
 	etch_texture *s_texture = &textures[s_texture_id];
 	
-	etch_pixel *d_data  = d_texture->data;
+	etch_char *d_data   = d_texture->data;
 	etch_sint *d_z_data = d_texture->z_data;
 	etch_sint d_width   = (etch_sint)d_texture->width;
 	etch_sint d_height  = (etch_sint)d_texture->height;
 	
-	etch_pixel *s_data = &(etch_pixel){255,255,255,255}; //Placeholder texture
+	etch_char *s_data  = (etch_char[4]){255,255,255,255}; //Placeholder texture
 	etch_sint s_width  = 1;
 	etch_sint s_height = 1;
 	
@@ -359,19 +748,19 @@ void etch_texture_triangle_draw_old(
 		s_height = s_texture->height;
 	}
 	
-	etch_sint min_x = MIN(d_a.x,d_b.x);
-	etch_sint min_y = MIN(d_a.y,d_b.y);
-	etch_sint min_z = MIN(d_a.z,d_b.z);
-	etch_sint max_x = MAX(d_a.x,d_b.x);
-	etch_sint max_y = MAX(d_a.y,d_b.y);
-	etch_sint max_z = MAX(d_a.z,d_b.z);
+	etch_sint min_x = MIN(d_ax,d_bx);
+	etch_sint min_y = MIN(d_ay,d_by);
+	etch_sint min_z = MIN(d_az,d_bz);
+	etch_sint max_x = MAX(d_ax,d_bx);
+	etch_sint max_y = MAX(d_ay,d_by);
+	etch_sint max_z = MAX(d_az,d_bz);
 	
-	min_x = MIN(min_x,d_c.x);
-	min_y = MIN(min_y,d_c.y);
-	min_z = MIN(min_z,d_c.z);
-	max_x = MAX(max_x,d_c.x);
-	max_y = MAX(max_y,d_c.y);
-	max_z = MAX(max_z,d_c.z);
+	min_x = MIN(min_x,d_cx);
+	min_y = MIN(min_y,d_cy);
+	min_z = MIN(min_z,d_cz);
+	max_x = MAX(max_x,d_cx);
+	max_y = MAX(max_y,d_cy);
+	max_z = MAX(max_z,d_cz);
 	
 	if ( //Return if triangle is outside of visibility
 		min_x>=d_width ||
@@ -384,424 +773,128 @@ void etch_texture_triangle_draw_old(
 		return;
 	}
 	
-	min_x = MAX(min_x,0); //Clip within screen space
-	min_y = MAX(min_y,0);
-	max_x = MIN(max_x,d_width-1);
-	max_y = MIN(max_y,d_height-1);
+	etch_sint temp_sint;
+	etch_char temp_char;
 	
-	etch_sint d_x;
-	etch_sint d_y;
-	etch_sint d_z;
-	etch_sint s_x;
-	etch_sint s_y;
-	etch_sint d_index;
-	etch_sint s_index;
-	etch_sint u;
-	etch_sint v;
-	etch_sint w;
-	etch_sint uvw;
-	etch_pixel c_d;
-	
-	for (d_y=min_y; d_y<=max_y; d_y++) {
-		for (d_x=min_x; d_x<=max_x; d_x++) {
-			u = determinant(d_b.x,d_b.y,d_c.x,d_c.y,d_x,d_y);
-			v = determinant(d_c.x,d_c.y,d_a.x,d_a.y,d_x,d_y);
-			w = determinant(d_a.x,d_a.y,d_b.x,d_b.y,d_x,d_y);
-			
-			if (u>=0 && v>=0 && w>=0) { //Edge test
-				uvw = u+v+w;
-				
-				u = u*FP/uvw;
-				v = v*FP/uvw;
-				w = w*FP/uvw;
-				
-				d_z=(u*d_a.z+v*d_b.z+w*d_c.z)/FP;
-				
-				d_index = d_y*d_width+d_x;
-				
-				if (d_z<d_z_data[d_index]) { //Depth test
-					s_x = ((u*s_a.x+v*s_b.x+w*s_c.x)/FP)%s_width;
-					s_y = ((u*s_a.y+v*s_b.y+w*s_c.y)/FP)%s_height;
-					
-					s_index = s_y*s_width+s_x;
-					
-					c_d = s_data[s_index];
-					
-					c_d.a = (c_d.a*(u*c_a.a/255+v*c_b.a/255+w*c_c.a/255))/FP;
-					
-					if (c_d.a>=dither_matrix[d_x%4][d_y%4]) { //Alpha test
-						c_d.r = (c_d.r*(u*c_a.r/255+v*c_b.r/255+w*c_c.r/255))/FP;
-						c_d.g = (c_d.g*(u*c_a.g/255+v*c_b.g/255+w*c_c.g/255))/FP;
-						c_d.b = (c_d.b*(u*c_a.b/255+v*c_b.b/255+w*c_c.b/255))/FP;
-						
-						d_data[d_index]   = c_d;
-						d_z_data[d_index] = d_z;
-					}
-				}
-			}
-		}
-	}
-}
-
-static void texture_vector(
-	etch_sint_vector3 d_a,
-	etch_sint_vector3 d_b,
-	etch_sint_vector3 d_c,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_sint_vector2 s_c,
-	etch_sint d_y,
-	etch_sint d_x_1,
-	etch_sint d_x_2,
-	etch_sint *s_x_1,
-	etch_sint *s_y_1,
-	etch_sint *s_slope_x,
-	etch_sint *s_slope_y
-) {
-	etch_sint u = determinant(d_b.x,d_b.y,d_c.x,d_c.y,d_x_1,d_y);
-	etch_sint v = determinant(d_c.x,d_c.y,d_a.x,d_a.y,d_x_1,d_y);
-	etch_sint w = determinant(d_a.x,d_a.y,d_b.x,d_b.y,d_x_1,d_y);
-	
-	etch_sint uvw = MAX(u+v+w,1);
-	
-	u = u*FP/uvw;
-	v = v*FP/uvw;
-	w = w*FP/uvw;
-	
-	*s_x_1 = u*s_a.x+v*s_b.x+w*s_c.x;
-	*s_y_1 = u*s_a.y+v*s_b.y+w*s_c.y;
-	
-	u = determinant(d_b.x,d_b.y,d_c.x,d_c.y,d_x_2,d_y);
-	v = determinant(d_c.x,d_c.y,d_a.x,d_a.y,d_x_2,d_y);
-	w = determinant(d_a.x,d_a.y,d_b.x,d_b.y,d_x_2,d_y);
-	
-	uvw = MAX(u+v+w,1);
-	
-	u = u*FP/uvw;
-	v = v*FP/uvw;
-	w = w*FP/uvw;
-	
-	etch_sint s_x_2 = u*s_a.x+v*s_b.x+w*s_c.x;
-	etch_sint s_y_2 = u*s_a.y+v*s_b.y+w*s_c.y;
-	
-	etch_sint d_x_d = MAX(d_x_2-d_x_1,1);
-	
-	*s_slope_x = (s_x_2-*s_x_1)/d_x_d;
-	*s_slope_y = (s_y_2-*s_y_1)/d_x_d;
-}
-
-static void etch_texture_triangle_top_draw(
-	etch_pixel *d_data,
-	etch_pixel *s_data,
-	etch_sint  *d_z_data,
-	etch_sint d_width,
-	etch_sint d_height,
-	etch_sint s_width,
-	etch_sint s_height,
-	etch_sint_vector3 d_a,
-	etch_sint_vector3 d_b,
-	etch_sint_vector3 d_c,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_sint_vector2 s_c,
-	etch_pixel c_a,
-	etch_pixel c_b,
-	etch_pixel c_c
-) {
-	if (d_c.x<d_b.x) {
-		etch_sint_vector3 temp_vector3 = d_b; d_b = d_c; d_c = temp_vector3;
-		etch_sint_vector2 temp_vector2 = s_b; s_b = s_c; s_c = temp_vector2;
-		etch_pixel temp_pixel = c_b; c_b = c_c; c_c = temp_pixel;
-	}
-	
-	etch_sint d_x;
-	etch_sint d_y;
-	etch_sint d_z=1;
-	etch_sint s_x;
-	etch_sint s_y;
-	etch_uint d_index;
-	etch_uint s_index;
-	etch_sint d_slope_1 = ((d_b.x-d_a.x)*FP)/(d_b.y-d_a.y);
-	etch_sint d_slope_2 = ((d_c.x-d_a.x)*FP)/(d_c.y-d_a.y);
-	etch_sint d_y_1 = MAX(d_a.y,0);
-	etch_sint d_y_2 = MIN(d_b.y,d_height-1);
-	etch_sint d_x_1 = d_a.x*FP+d_slope_1*(d_y_1-d_a.y);
-	etch_sint d_x_2 = d_a.x*FP+d_slope_2*(d_y_1-d_a.y);
-	etch_sint s_x_1;
-	etch_sint s_y_1;
-	etch_sint s_slope_x;
-	etch_sint s_slope_y;
-	etch_pixel c_d;
-	
-	for (
-		d_y  = d_y_1;
-		d_y <= d_y_2;
-		d_y ++
-	) {
-		d_x = MAX(d_x_1/FP,0);
+	if (d_ay>d_cy) {
+		temp_sint = d_ax; d_ax = d_cx; d_cx = temp_sint;
+		temp_sint = d_ay; d_ay = d_cy; d_cy = temp_sint;
+		temp_sint = d_az; d_az = d_cz; d_cz = temp_sint;
 		
-		texture_vector(
-			d_a, d_b, d_c,
-			s_a, s_b, s_c,
-			d_y, d_x, d_x_2/FP,
-			&s_x_1, &s_y_1,
-			&s_slope_x, &s_slope_y
-		);
+		temp_sint = s_ax; s_ax = s_cx; s_cx = temp_sint;
+		temp_sint = s_ay; s_ay = s_cy; s_cy = temp_sint;
 		
-		for (
-			;
-			d_x <= MIN(d_x_2/FP,d_width-1);
-			d_x ++
-		) {
-			s_x = (s_x_1/FP)%s_width;
-			s_y = (s_y_1/FP)%s_height;
-			
-			d_index = d_y*d_width+d_x;
-			s_index = s_y*s_width+s_x;
-			
-			d_data[d_index] = s_data[s_index];
-			
-			s_x_1 += s_slope_x;
-			s_y_1 += s_slope_y;
-		}
+		temp_char = c_ar; c_ar = c_cr; c_cr = temp_char;
+		temp_char = c_ag; c_ag = c_cg; c_cg = temp_char;
+		temp_char = c_ab; c_ab = c_cb; c_cb = temp_char;
+		temp_char = c_aa; c_aa = c_ca; c_ca = temp_char;
+	}
+	
+	if (d_ay>d_by) {
+		temp_sint = d_ax; d_ax = d_bx; d_bx = temp_sint;
+		temp_sint = d_ay; d_ay = d_by; d_by = temp_sint;
+		temp_sint = d_az; d_az = d_bz; d_bz = temp_sint;
 		
-		d_x_1 += d_slope_1;
-		d_x_2 += d_slope_2;
-	}
-}
-
-static void etch_texture_triangle_bottom_draw(
-	etch_pixel *d_data,
-	etch_pixel *s_data,
-	etch_sint  *d_z_data,
-	etch_sint d_width,
-	etch_sint d_height,
-	etch_sint s_width,
-	etch_sint s_height,
-	etch_sint_vector3 d_a,
-	etch_sint_vector3 d_b,
-	etch_sint_vector3 d_c,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_sint_vector2 s_c,
-	etch_pixel c_a,
-	etch_pixel c_b,
-	etch_pixel c_c
-) {
-	if (d_c.x<d_a.x) {
-		etch_sint_vector3 temp_vector3 = d_a; d_a = d_c; d_c = temp_vector3;
-		etch_sint_vector2 temp_vector2 = s_a; s_a = s_c; s_c = temp_vector2;
-		etch_pixel temp_pixel = c_a; c_a = c_c; c_c = temp_pixel;
-	}
-	
-	etch_sint d_x;
-	etch_sint d_y;
-	etch_sint d_z=1;
-	etch_sint s_x;
-	etch_sint s_y;
-	etch_uint d_index;
-	etch_uint s_index;
-	etch_sint d_slope_1 = ((d_b.x-d_a.x)*FP)/(d_b.y-d_a.y);
-	etch_sint d_slope_2 = ((d_b.x-d_c.x)*FP)/(d_b.y-d_c.y);
-	etch_sint d_y_1 = MIN(d_b.y,d_height-1);
-	etch_sint d_y_2 = MAX(d_a.y,0);
-	etch_sint d_x_1 = d_b.x*FP-d_slope_1*(d_b.y-d_y_1);
-	etch_sint d_x_2 = d_b.x*FP-d_slope_2*(d_b.y-d_y_1);
-	etch_sint s_x_1;
-	etch_sint s_y_1;
-	etch_sint s_slope_x;
-	etch_sint s_slope_y;
-	etch_pixel c_d;
-	
-	for (
-		d_y   = d_y_1;
-		d_y  >= d_y_2;
-		d_y --
-	) {
-		d_x = MAX(d_x_1/FP,0);
+		temp_sint = s_ax; s_ax = s_bx; s_bx = temp_sint;
+		temp_sint = s_ay; s_ay = s_by; s_by = temp_sint;
 		
-		texture_vector(
-			d_a, d_b, d_c,
-			s_a, s_b, s_c,
-			d_y, d_x, d_x_2/FP,
-			&s_x_1, &s_y_1,
-			&s_slope_x, &s_slope_y
-		);
+		temp_char = c_ar; c_ar = c_br; c_br = temp_char;
+		temp_char = c_ag; c_ag = c_bg; c_bg = temp_char;
+		temp_char = c_ab; c_ab = c_bb; c_bb = temp_char;
+		temp_char = c_aa; c_aa = c_ba; c_ba = temp_char;
+	}
+	
+	if (d_by>d_cy) {
+		temp_sint = d_bx; d_bx = d_cx; d_cx = temp_sint;
+		temp_sint = d_by; d_by = d_cy; d_cy = temp_sint;
+		temp_sint = d_bz; d_bz = d_cz; d_cz = temp_sint;
 		
-		for (
-			;
-			d_x <= MIN(d_x_2/FP,d_width-1);
-			d_x ++
-		) {
-			//d_z=(u*d_a.z+v*d_b.z+w*d_c.z)/FP;
-				
-			d_index = d_y*d_width+d_x;
-			/*
-			if (d_z<d_z_data[d_index]) { //Depth test
-				//s_x = ((u*s_a.x+v*s_b.x+w*s_c.x)/FP)%s_width;
-				//s_y = ((u*s_a.y+v*s_b.y+w*s_c.y)/FP)%s_height;
-				
-				s_x = (s_x_1/FP)%s_width;
-				s_y = (s_y_1/FP)%s_height;
-				
-				s_index = s_y*s_width+s_x;
-				
-				c_d = s_data[s_index];
-				
-				//c_d.a = (c_d.a*(u*c_a.a/255+v*c_b.a/255+w*c_c.a/255))/FP;
-				
-				if (c_d.a>=dither_matrix[d_x%4][d_y%4]) { //Alpha test
-					//c_d.r = (c_d.r*(u*c_a.r/255+v*c_b.r/255+w*c_c.r/255))/FP;
-					//c_d.g = (c_d.g*(u*c_a.g/255+v*c_b.g/255+w*c_c.g/255))/FP;
-					//c_d.b = (c_d.b*(u*c_a.b/255+v*c_b.b/255+w*c_c.b/255))/FP;
-					
-					//d_data[d_index]   = c_d;
-					//d_z_data[d_index] = d_z;
-				}
-				
-				d_data[d_index]   = c_d;
-			}
-			*/
-			
-			s_x = (s_x_1/FP)%s_width;
-			s_y = (s_y_1/FP)%s_height;
-			
-			s_index = s_y*s_width+s_x;
-			
-			d_data[d_index] = s_data[s_index];
-			
-			s_x_1 += s_slope_x;
-			s_y_1 += s_slope_y;
-		}
+		temp_sint = s_bx; s_bx = s_cx; s_cx = temp_sint;
+		temp_sint = s_by; s_by = s_cy; s_cy = temp_sint;
 		
-		d_x_1 -= d_slope_1;
-		d_x_2 -= d_slope_2;
-	}
-}
-
-void etch_texture_triangle_draw(
-	etch_uint d_texture_id,
-	etch_uint s_texture_id,
-	etch_sint_vector3 d_a,
-	etch_sint_vector3 d_b,
-	etch_sint_vector3 d_c,
-	etch_sint_vector2 s_a,
-	etch_sint_vector2 s_b,
-	etch_sint_vector2 s_c,
-	etch_pixel c_a,
-	etch_pixel c_b,
-	etch_pixel c_c
-) {
-	if (
-		textures==NULL ||
-		d_texture_id>=ETCH_MAX_TEXTURES ||
-		textures[d_texture_id].z_data==NULL ||
-		determinant(d_a.x,d_a.y,d_b.x,d_b.y,d_c.x,d_c.y)<=0
-	) {
-		return;
+		temp_char = c_br; c_br = c_cr; c_cr = temp_char;
+		temp_char = c_bg; c_bg = c_cg; c_cg = temp_char;
+		temp_char = c_bb; c_bb = c_cb; c_cb = temp_char;
+		temp_char = c_ba; c_ba = c_ca; c_ca = temp_char;
 	}
 	
-	etch_texture *d_texture = &textures[d_texture_id];
-	etch_texture *s_texture = &textures[s_texture_id];
-	
-	etch_pixel *d_data  = d_texture->data;
-	etch_sint *d_z_data = d_texture->z_data;
-	etch_sint d_width   = (etch_sint)d_texture->width;
-	etch_sint d_height  = (etch_sint)d_texture->height;
-	
-	etch_pixel *s_data = &(etch_pixel){255,255,255,255}; //Placeholder texture
-	etch_sint s_width  = 1;
-	etch_sint s_height = 1;
-	
-	if (
-		s_texture_id<ETCH_MAX_TEXTURES &&
-		s_texture->data!=NULL
-	) {
-		s_data   = s_texture->data;
-		s_width  = s_texture->width;
-		s_height = s_texture->height;
-	}
-	
-	etch_sint_vector3 temp_sint_vector3;
-	etch_sint_vector2 temp_sint_vector2;
-	etch_pixel temp_pixel;
-	
-	if (d_a.y>d_c.y) {
-		temp_sint_vector3 = d_a; d_a = d_c; d_c = temp_sint_vector3;
-		temp_sint_vector2 = s_a; s_a = s_c; s_c = temp_sint_vector2;
-		temp_pixel = c_a; c_a = c_c; c_c = temp_pixel;
-	}
-	
-	if (d_a.y>d_b.y) {
-		temp_sint_vector3 = d_a; d_a = d_b; d_b = temp_sint_vector3;
-		temp_sint_vector2 = s_a; s_a = s_b; s_b = temp_sint_vector2;
-		temp_pixel = c_a; c_a = c_b; c_b = temp_pixel;
-	}
-	
-	if (d_b.y>d_c.y) {
-		temp_sint_vector3 = d_b; d_b = d_c; d_c = temp_sint_vector3;
-		temp_sint_vector2 = s_b; s_b = s_c; s_c = temp_sint_vector2;
-		temp_pixel = c_b; c_b = c_c; c_c = temp_pixel;
-	}
-	
-	if (d_b.y==d_c.y) {
+	if (d_by==d_cy) {
 		etch_texture_triangle_top_draw(
 			d_data, s_data,
 			d_z_data,
 			d_width, d_height,
 			s_width, s_height,
-			d_a, d_b, d_c,
-			s_a, s_b, s_c,
-			c_a, c_b, c_c
+			d_ax, d_ay, d_az,
+			d_bx, d_by, d_bz,
+			d_cx, d_cy, d_cz,
+			s_ax, s_ay, 
+			s_bx, s_by,
+			s_cx, s_cy,
+			c_ar, c_ag, c_ab, c_aa,
+			c_br, c_bg, c_bb, c_ba,
+			c_cr, c_cg, c_cb, c_ca
 		);
-	} else if (d_a.y==d_b.y) {
+	} else if (d_ay==d_by) {
 		etch_texture_triangle_bottom_draw(
 			d_data, s_data,
 			d_z_data,
 			d_width, d_height,
 			s_width, s_height,
-			d_a, d_c, d_b,
-			s_a, s_c, s_b,
-			c_a, c_c, c_b
+			d_ax, d_ay, d_az,
+			d_cx, d_cy, d_cz,
+			d_bx, d_by, d_bz,
+			s_ax, s_ay, 
+			s_cx, s_cy,
+			s_bx, s_by,
+			c_ar, c_ag, c_ab, c_aa,
+			c_cr, c_cg, c_cb, c_ca,
+			c_br, c_bg, c_bb, c_ba
 		);
 	} else {
-		etch_sint temp_sint = ((d_b.y-d_a.y)*FP)/(d_c.y-d_a.y);
+		temp_sint = ((d_by-d_ay)*FP)/(d_cy-d_ay);
 		
-		etch_sint_vector3 d_d = (etch_sint_vector3){
-			d_a.x+((temp_sint*(d_c.x-d_a.x))/FP),
-			d_b.y,
-			d_a.z+((temp_sint*(d_c.z-d_a.z))/FP)
-		};
+		etch_sint d_dx = d_ax+((temp_sint*(d_cx-d_ax))/FP);
+		etch_sint d_dy = d_by;
+		etch_sint d_dz = d_az+((temp_sint*(d_cz-d_az))/FP);
 		
-		etch_sint_vector2 s_d = (etch_sint_vector2){
-			s_a.x+((temp_sint*(s_c.x-s_a.x))/FP),
-			s_a.y+((temp_sint*(s_c.y-s_a.y))/FP)
-		};
+		etch_sint s_dx = s_ax+((temp_sint*(s_cx-s_ax))/FP);
+		etch_sint s_dy = s_ay+((temp_sint*(s_cy-s_ay))/FP);
 		
-		etch_pixel c_d = (etch_pixel){
-			c_a.r+((temp_sint*(c_c.r-c_a.r))/FP),
-			c_a.g+((temp_sint*(c_c.g-c_a.g))/FP),
-			c_a.b+((temp_sint*(c_c.b-c_a.b))/FP),
-			c_a.a+((temp_sint*(c_c.a-c_a.a))/FP)
-		};
+		etch_sint c_dr = c_ar+((temp_sint*(c_cr-c_ar))/FP);
+		etch_sint c_dg = c_ag+((temp_sint*(c_cg-c_ag))/FP);
+		etch_sint c_db = c_ab+((temp_sint*(c_cb-c_ab))/FP);
+		etch_sint c_da = c_aa+((temp_sint*(c_ca-c_aa))/FP);
 		
 		etch_texture_triangle_top_draw(
 			d_data, s_data,
 			d_z_data,
 			d_width, d_height,
 			s_width, s_height,
-			d_a, d_b, d_d,
-			s_a, s_b, s_d,
-			c_a, c_b, c_d
+			d_ax, d_ay, d_az,
+			d_bx, d_by, d_bz,
+			d_dx, d_dy, d_dz,
+			s_ax, s_ay,
+			s_bx, s_by,
+			s_dx, s_dy,
+			c_ar, c_ag, c_ab, c_aa,
+			c_br, c_bg, c_bb, c_ba,
+			c_dr, c_dg, c_db, c_da
 		);
+		
 		etch_texture_triangle_bottom_draw(
 			d_data, s_data,
 			d_z_data,
 			d_width, d_height,
 			s_width, s_height,
-			d_b, d_c, d_d,
-			s_b, s_c, s_d,
-			c_b, c_c, c_d
+			d_bx, d_by, d_bz,
+			d_cx, d_cy, d_cz,
+			d_dx, d_dy, d_dz,
+			s_bx, s_by,
+			s_cx, s_cy,
+			s_dx, s_dy,
+			c_br, c_bg, c_bb, c_ba,
+			c_cr, c_cg, c_cb, c_ca,
+			c_dr, c_dg, c_db, c_da
 		);
 	}
 }
@@ -1086,130 +1179,187 @@ void etch_vertex_texture_draw(
 	etch_uint f_i;
 	etch_uint v_i;
 	
-	etch_real_vector3 p_a; //Positions
-	etch_real_vector3 p_b;
-	etch_real_vector3 p_c;
+	etch_real p_ax; //Positions
+	etch_real p_ay;
+	etch_real p_az;
+	etch_real p_bx;
+	etch_real p_by;
+	etch_real p_bz;
+	etch_real p_cx;
+	etch_real p_cy;
+	etch_real p_cz;
 	
-	etch_real_vector3 v_a; //Transformed positions
-	etch_real_vector3 v_b;
-	etch_real_vector3 v_c;
+	etch_real v_ax; //Transformed positions
+	etch_real v_ay;
+	etch_real v_az;
+	etch_real v_aw;
+	etch_real v_bx;
+	etch_real v_by;
+	etch_real v_bz;
+	etch_real v_bw;
+	etch_real v_cx;
+	etch_real v_cy;
+	etch_real v_cz;
+	etch_real v_cw;
 	
-	etch_sint_vector2 t_a; //Texture coordinates
-	etch_sint_vector2 t_b;
-	etch_sint_vector2 t_c;
+	etch_sint t_ax; //Texture coordinates
+	etch_sint t_ay;
+	etch_sint t_bx;
+	etch_sint t_by;
+	etch_sint t_cx;
+	etch_sint t_cy;
 	
-	etch_sint_vector3 d_a; //Final vector
-	etch_sint_vector3 d_b;
-	etch_sint_vector3 d_c;
+	etch_sint d_ax; //Final vector
+	etch_sint d_ay;
+	etch_sint d_az;
+	etch_sint d_bx;
+	etch_sint d_by;
+	etch_sint d_bz;
+	etch_sint d_cx;
+	etch_sint d_cy;
+	etch_sint d_cz;
 	
-	etch_pixel c_a = (etch_pixel){255,255,255,255};
-	etch_pixel c_b = (etch_pixel){255,255,255,255};
-	etch_pixel c_c = (etch_pixel){255,255,255,255};
+	etch_char c_ar = 255; //Color
+	etch_char c_ag = 255;
+	etch_char c_ab = 255;
+	etch_char c_aa = 255;
+	etch_char c_br = 255;
+	etch_char c_bg = 255;
+	etch_char c_bb = 255;
+	etch_char c_ba = 255;
+	etch_char c_cr = 255;
+	etch_char c_cg = 255;
+	etch_char c_cb = 255;
+	etch_char c_ca = 255;
 	
 	for (f_i=0; f_i<face_vertexes; f_i+=6) {
-		v_i   = face_data[f_i].uint*3;
-		p_a.x = position_data[v_i].real;
-		p_a.y = position_data[v_i+1].real;
-		p_a.z = position_data[v_i+2].real;
+		v_i  = face_data[f_i].uint*3;
+		p_ax = position_data[v_i].real;
+		p_ay = position_data[v_i+1].real;
+		p_az = position_data[v_i+2].real;
 		
-		v_i   = face_data[f_i+1].uint*2;
-		t_a.x = (etch_sint)(texture_data[v_i].real*s_width);
-		t_a.y = (etch_sint)(texture_data[v_i+1].real*s_height);
+		v_i  = face_data[f_i+1].uint*2;
+		t_ax = (etch_sint)(texture_data[v_i].real*s_width);
+		t_ay = (etch_sint)(texture_data[v_i+1].real*s_height);
 		
-		v_i   = face_data[f_i+2].uint*3;
-		p_b.x = position_data[v_i].real;
-		p_b.y = position_data[v_i+1].real;
-		p_b.z = position_data[v_i+2].real;
+		v_i  = face_data[f_i+2].uint*3;
+		p_bx = position_data[v_i].real;
+		p_by = position_data[v_i+1].real;
+		p_bz = position_data[v_i+2].real;
 		
-		v_i   = face_data[f_i+3].uint*2;
-		t_b.x = (etch_sint)(texture_data[v_i].real*s_width);
-		t_b.y = (etch_sint)(texture_data[v_i+1].real*s_height);
+		v_i  = face_data[f_i+3].uint*2;
+		t_bx = (etch_sint)(texture_data[v_i].real*s_width);
+		t_by = (etch_sint)(texture_data[v_i+1].real*s_height);
 		
-		v_i   = face_data[f_i+4].uint*3;
-		p_c.x = position_data[v_i].real;
-		p_c.y = position_data[v_i+1].real;
-		p_c.z = position_data[v_i+2].real;
+		v_i  = face_data[f_i+4].uint*3;
+		p_cx = position_data[v_i].real;
+		p_cy = position_data[v_i+1].real;
+		p_cz = position_data[v_i+2].real;
 		
-		v_i   = face_data[f_i+5].uint*2;
-		t_c.x = (etch_sint)(texture_data[v_i].real*s_width);
-		t_c.y = (etch_sint)(texture_data[v_i+1].real*s_height);
+		v_i  = face_data[f_i+5].uint*2;
+		t_cx = (etch_sint)(texture_data[v_i].real*s_width);
+		t_cy = (etch_sint)(texture_data[v_i+1].real*s_height);
 		
-		v_a.x = (
-			render_matrix[0][3]+
-			p_a.x*render_matrix[0][0]+
-			p_a.y*render_matrix[0][1]+
-			p_a.z*render_matrix[0][2]
+		v_ax = (
+			p_ax*render_matrix[0][0]+
+			p_ay*render_matrix[0][1]+
+			p_az*render_matrix[0][2]+
+			render_matrix[0][3]
 		);
-		v_a.y = (
-			render_matrix[1][3]+
-			p_a.x*render_matrix[1][0]+
-			p_a.y*render_matrix[1][1]+
-			p_a.z*render_matrix[1][2]
+		v_ay = (
+			p_ax*render_matrix[1][0]+
+			p_ay*render_matrix[1][1]+
+			p_az*render_matrix[1][2]+
+			render_matrix[1][3]
 		);
-		v_a.z = (
-			render_matrix[2][3]+
-			p_a.x*render_matrix[2][0]+
-			p_a.y*render_matrix[2][1]+
-			p_a.z*render_matrix[2][2]
+		v_az = (
+			p_ax*render_matrix[2][0]+
+			p_ay*render_matrix[2][1]+
+			p_az*render_matrix[2][2]+
+			render_matrix[2][3]
 		);
-		
-		v_b.x = (
-			render_matrix[0][3]+
-			p_b.x*render_matrix[0][0]+
-			p_b.y*render_matrix[0][1]+
-			p_b.z*render_matrix[0][2]
-		);
-		v_b.y = (
-			render_matrix[1][3]+
-			p_b.x*render_matrix[1][0]+
-			p_b.y*render_matrix[1][1]+
-			p_b.z*render_matrix[1][2]
-		);
-		v_b.z = (
-			render_matrix[2][3]+
-			p_b.x*render_matrix[2][0]+
-			p_b.y*render_matrix[2][1]+
-			p_b.z*render_matrix[2][2]
+		v_aw = (
+			p_ax*render_matrix[3][0]+
+			p_ay*render_matrix[3][1]+
+			p_az*render_matrix[3][2]+
+			render_matrix[3][3]
 		);
 		
-		v_c.x = (
-			render_matrix[0][3]+
-			p_c.x*render_matrix[0][0]+
-			p_c.y*render_matrix[0][1]+
-			p_c.z*render_matrix[0][2]
+		v_bx = (
+			p_bx*render_matrix[0][0]+
+			p_by*render_matrix[0][1]+
+			p_bz*render_matrix[0][2]+
+			render_matrix[0][3]
 		);
-		v_c.y = (
-			render_matrix[1][3]+
-			p_c.x*render_matrix[1][0]+
-			p_c.y*render_matrix[1][1]+
-			p_c.z*render_matrix[1][2]
+		v_by = (
+			p_bx*render_matrix[1][0]+
+			p_by*render_matrix[1][1]+
+			p_bz*render_matrix[1][2]+
+			render_matrix[1][3]
 		);
-		v_c.z = (
-			render_matrix[2][3]+
-			p_c.x*render_matrix[2][0]+
-			p_c.y*render_matrix[2][1]+
-			p_c.z*render_matrix[2][2]
+		v_bz = (
+			p_bx*render_matrix[2][0]+
+			p_by*render_matrix[2][1]+
+			p_bz*render_matrix[2][2]+
+			render_matrix[2][3]
+		);
+		v_bw = (
+			p_bx*render_matrix[3][0]+
+			p_by*render_matrix[3][1]+
+			p_bz*render_matrix[3][2]+
+			render_matrix[3][3]
 		);
 		
-		d_a.x = (etch_sint)((v_a.x/v_a.z+1)*d_width_h);
-		d_a.y = (etch_sint)(d_height-(v_a.y/v_a.z+1)*d_height_h);
-		d_a.z = (etch_sint)(v_a.z);
+		v_cx = (
+			p_cx*render_matrix[0][0]+
+			p_cy*render_matrix[0][1]+
+			p_cz*render_matrix[0][2]+
+			render_matrix[0][3]
+		);
+		v_cy = (
+			p_cx*render_matrix[1][0]+
+			p_cy*render_matrix[1][1]+
+			p_cz*render_matrix[1][2]+
+			render_matrix[1][3]
+		);
+		v_cz = (
+			p_cx*render_matrix[2][0]+
+			p_cy*render_matrix[2][1]+
+			p_cz*render_matrix[2][2]+
+			render_matrix[2][3]
+		);
+		v_cw = (
+			p_cx*render_matrix[3][0]+
+			p_cy*render_matrix[3][1]+
+			p_cz*render_matrix[3][2]+
+			render_matrix[3][3]
+		);
 		
-		d_b.x = (etch_sint)((v_b.x/v_b.z+1)*d_width_h);
-		d_b.y = (etch_sint)(d_height-(v_b.y/v_b.z+1)*d_height_h);
-		d_b.z = (etch_sint)(v_b.z);
+		d_ax = (etch_sint)((v_ax/v_aw+1)*d_width_h);
+		d_ay = (etch_sint)(d_height-(v_ay/v_aw+1)*d_height_h);
+		d_az = (etch_sint)(v_az*FP);
 		
-		d_c.x = (etch_sint)((v_c.x/v_c.z+1)*d_width_h);
-		d_c.y = (etch_sint)(d_height-(v_c.y/v_c.z+1)*d_height_h);
-		d_c.z = (etch_sint)(v_c.z);
+		d_bx = (etch_sint)((v_bx/v_bw+1)*d_width_h);
+		d_by = (etch_sint)(d_height-(v_by/v_bw+1)*d_height_h);
+		d_bz = (etch_sint)(v_bz*FP);
 		
-		if (d_a.z>0 && d_b.z>0 && d_c.z>0) {
+		d_cx = (etch_sint)((v_cx/v_cw+1)*d_width_h);
+		d_cy = (etch_sint)(d_height-(v_cy/v_cw+1)*d_height_h);
+		d_cz = (etch_sint)(v_cz*FP);
+		
+		if (v_aw>0 && v_bw>0 && v_cw>0) {
 			etch_texture_triangle_draw(
 				d_texture_id,
 				s_texture_id,
-				d_a, d_b, d_c,
-				t_a, t_b, t_c,
-				c_a, c_b, c_c
+				d_ax, d_ay, d_az,
+				d_bx, d_by, d_bz,
+				d_cx, d_cy, d_cz,
+				t_ax, t_ay,
+				t_bx, t_by,
+				t_cx, t_cy,
+				c_ar, c_ag, c_ab, c_aa,
+				c_br, c_bg, c_bb, c_ba,
+				c_cr, c_cg, c_cb, c_ca
 			);
 		}
 	}

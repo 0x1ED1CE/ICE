@@ -49,6 +49,24 @@ const ice_uint cube_faces[]={
 	4,12, 1,14, 8,8
 };
 
+ice_uint texture_1;
+ice_uint font;
+
+lmath_real view[4][4]           = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
+lmath_real camera[4][4]         = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
+lmath_real inverse_camera[4][4] = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
+lmath_real model[4][4]          = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
+lmath_real render[4][4]         = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
+
+ice_uint vertices_id;
+ice_uint uvs_id;
+ice_uint faces_id;
+
+ice_char fps_text[32];
+
+lmath_real camera_rotation[3] = {0,0,0};
+lmath_real camera_position[3] = {0,0,0};
+
 void print_graphics(
 	ice_uint d_texture_id,
 	ice_uint font_texture_id,
@@ -97,16 +115,15 @@ void print_graphics(
 	}
 }
 
-lmath_real camera_rotation[3] = {0,0,0};
-
 void move_camera(
-	lmath_real camera[4][4],
 	lmath_real tick
 ) {
-	lmath_real camera_position[3] = {0,0,0};
+	camera_position[0] = 0;
+	camera_position[1] = 0;
+	camera_position[2] = 0;
 	
 	lmath_real pos_speed = 8*tick;
-	lmath_real rot_speed = 3*tick;
+	lmath_real rot_speed = 4*tick;
 	
 	camera_position[0] += pos_speed*(lmath_real)ice_input_get(0,32);
 	camera_position[0] -= pos_speed*(lmath_real)ice_input_get(0,30);
@@ -134,19 +151,13 @@ void move_camera(
 	);
 }
 
-int main() {
-	if (ice_init()) {
-		return -2;
-	}
+void ice_init() {
+	camera_rotation[0] = 0;
+	camera_rotation[1] = 0;
+	camera_rotation[2] = 0;
 	
-	ice_uint texture_1 = ice_video_texture_load(2);
-	ice_uint font      = ice_video_texture_load(1);
-	
-	lmath_real view[4][4]           = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
-	lmath_real camera[4][4]         = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
-	lmath_real inverse_camera[4][4] = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
-	lmath_real model[4][4]          = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
-	lmath_real render[4][4]         = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
+	texture_1 = ice_video_texture_load(2);
+	font      = ice_video_texture_load(1);
 	
 	lmath_matrix_44_perspective(
 		view,
@@ -158,16 +169,16 @@ int main() {
 	
 	lmath_matrix_44_position_set(
 		camera,
-		(lmath_real[3]){0,0,4}
+		(lmath_real[3]){0,0,3}
 	);
 	
-	ice_uint vertices_id = ice_video_vertex_new(
+	vertices_id = ice_video_vertex_new(
 		sizeof(cube_vertices)/sizeof(ice_real)
 	);
-	ice_uint uvs_id = ice_video_vertex_new(
+	uvs_id = ice_video_vertex_new(
 		sizeof(cube_uvs)/sizeof(ice_real)
 	);
-	ice_uint faces_id = ice_video_vertex_new(
+	faces_id = ice_video_vertex_new(
 		sizeof(cube_faces)/sizeof(ice_uint)
 	);
 	
@@ -199,54 +210,45 @@ int main() {
 			cube_faces[i]-1
 		);
 	}
+}
+
+void ice_deinit() {}
+
+ice_uint ice_update(
+	ice_real tick
+) {
+	ice_video_texture_clear(0);
+		
+	lmath_matrix_44_copy(view,render);
+	lmath_matrix_44_copy(camera,inverse_camera);
+	lmath_matrix_44_inverse(inverse_camera);
+	lmath_matrix_44_multiply(render,inverse_camera);
+	lmath_matrix_44_multiply(render,model);
 	
-	ice_char fps_text[32];
+	ice_video_vertex_texture_draw(
+		0,
+		texture_1,
+		(ice_real (*)[4])render,
+		vertices_id,
+		uvs_id,
+		faces_id
+	);
 	
-	ice_real last_frame=ice_clock_get();
+	sprintf(
+		(char *)fps_text,
+		"FPS: %.0f",
+		1/tick
+	);
 	
-	while (1) {
-		ice_video_texture_clear(0);
-		
-		lmath_matrix_44_copy(view,render);
-		lmath_matrix_44_copy(camera,inverse_camera);
-		lmath_matrix_44_inverse(inverse_camera);
-		lmath_matrix_44_multiply(render,inverse_camera);
-		lmath_matrix_44_multiply(render,model);
-		
-		ice_video_vertex_texture_draw(
-			0,
-			texture_1,
-			(ice_real (*)[4])render,
-			vertices_id,
-			uvs_id,
-			faces_id
-		);
-		
-		sprintf(
-			(char *)fps_text,
-			"FPS: %.0f",
-			1/(ice_clock_get()-last_frame)
-		);
-		
-		print_graphics(
-			0, font,
-			12, 16,
-			5, 5,
-			fps_text,
-			255, 255, 255, 255
-		);
-		
-		ice_video_buffer();
-		
-		move_camera(
-			camera,
-			(lmath_real)ice_clock_get()-last_frame
-		);
-		
-		last_frame=ice_clock_get();
-	}
+	print_graphics(
+		0, font,
+		12, 16,
+		5, 5,
+		fps_text,
+		255, 255, 255, 255
+	);
 	
-	ice_deinit();
+	move_camera((lmath_real)tick);
 	
-	return 0;
+	return ice_input_get(0,0x01)!=1.0f;
 }

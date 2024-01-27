@@ -52,11 +52,7 @@ void print_graphics(
 	}
 }
 
-int main() {
-	if (ice_init()) {
-		return -2;
-	}
-	
+void ice_init() {
 	ice_uint font   = ice_video_texture_load(1);
 	ice_uint sample = ice_audio_sample_load(0);
 	ice_uint source = ice_audio_source_new();
@@ -78,14 +74,12 @@ int main() {
 		(ice_char *)"Press ESC to exit",
 		255, 255, 255, 255
 	);
-	
-	ice_video_buffer();
-	
-	while (ice_input_get(0,0x01)!=1.0f) {
-		ice_audio_buffer();
-	}
-	
-	ice_deinit();
-	
-	return 0;
+}
+
+void ice_deinit() {}
+
+ice_uint ice_update(
+	ice_real tick
+) {
+	return ice_input_get(0,0x01)!=1.0f;
 }

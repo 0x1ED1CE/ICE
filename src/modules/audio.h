@@ -10,9 +10,11 @@ ice_uint ice_audio_init();
 
 void ice_audio_deinit();
 
-void ice_audio_flush();
-
 void ice_audio_buffer();
+
+void ice_audio_sample_flush();
+
+void ice_audio_source_flush();
 
 ice_uint ice_audio_sample_load(
 	ice_uint file_id
@@ -22,7 +24,7 @@ void ice_audio_sample_delete(
 	ice_uint sample_id
 );
 
-ice_uint ice_audio_sample_length_get(
+ice_real ice_audio_sample_length_get(
 	ice_uint sample_id
 );
 
@@ -41,13 +43,13 @@ void ice_audio_source_sample_set(
 	ice_uint sample_id
 );
 
-ice_uint ice_audio_source_position_get(
+ice_real ice_audio_source_position_get(
 	ice_uint source_Id
 );
 
 void ice_audio_source_position_set(
 	ice_uint source_id,
-	ice_uint position
+	ice_real position
 );
 
 ice_char ice_audio_source_state_get(
@@ -59,13 +61,13 @@ void ice_audio_source_state_set(
 	ice_char state
 );
 
-ice_uint ice_audio_source_volume_get(
+ice_real ice_audio_source_volume_get(
 	ice_uint source_id
 );
 
 void ice_audio_source_volume_set(
 	ice_uint source_id,
-	ice_uint volume
+	ice_real volume
 );
 
 #endif

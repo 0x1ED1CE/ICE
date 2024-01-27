@@ -28,32 +28,38 @@ void ice_log(
 	fclose(log);
 }
 
-ice_uint ice_init() {
-	ice_log((ice_char *)"Initializing...");
-	
-	if (ice_clock_init()) {
-		return ICE_INIT_ERROR_CLOCK;
-	}
-	if (ice_audio_init()) {
-		return ICE_INIT_ERROR_AUDIO;
-	}
-	if (ice_video_init()) {
-		return ICE_INIT_ERROR_VIDEO;
-	}
-	if (ice_input_init()) {
-		return ICE_INIT_ERROR_INPUT;
+int main() {
+	if (
+		ice_clock_init() ||
+		ice_audio_init() ||
+		ice_video_init() ||
+		ice_input_init()
+	) {
+		ice_deinit();
+		
+		printf("An error occurred. See LOG.TXT for more info.\n");
+		
+		return -1;
 	}
 	
-	ice_log((ice_char *)"Initialization done.");
+	ice_init();
 	
-	return 0;
-}
-
-void ice_deinit() {
-	ice_log((ice_char *)"Exiting...");
+	ice_real clock;
+	
+	do {
+		clock = ice_clock_get();
+		
+		ice_audio_buffer();
+		ice_video_buffer();
+		
+	} while (ice_update(ice_clock_get()-clock));
+	
+	ice_deinit();
 	
 	ice_clock_deinit();
 	ice_audio_deinit();
 	ice_video_deinit();
 	ice_input_deinit();
+	
+	return 0;
 }

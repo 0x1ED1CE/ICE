@@ -11,10 +11,13 @@
 #include <go32.h>
 #include <dpmi.h>
 
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#define MAX(a,b) ((a)>(b)?(a):(b))
+
 #define BUFFER_SIZE 2048
 
-#define MAX_SAMPLES 256
-#define MAX_SOURCES 256
+#define MAX_SAMPLES 32
+#define MAX_SOURCES 64
 
 #define STATE_NONE    0
 #define STATE_PAUSED  1
@@ -23,6 +26,7 @@
 
 typedef struct {
 	unsigned char *data;
+	unsigned int   rate;
 	unsigned int   length;
 } audio_sample;
 
@@ -30,7 +34,7 @@ typedef struct {
 	unsigned int  sample_id;
 	unsigned int  position;
 	unsigned char state;  //0 = Unused, 1 = Paused, 2 = Playing, 3 = Playing loop
-	unsigned char dampen; //Inverse volume
+	unsigned char volume;
 } audio_source;
 
 audio_sample *samples = NULL;
@@ -78,35 +82,6 @@ void dsp_write(
   outportb(dsp_port+0xC,value);
 }
 
-void ice_audio_flush() {
-	audio_sample *sample;
-	audio_source *source;
-	
-	if (samples!=NULL) {
-		for (unsigned int i=0; i<MAX_SAMPLES; i++) {
-			sample=&samples[i];
-			
-			if (sample->data!=NULL) {
-				free(sample->data);
-				
-				sample->data   = NULL;
-				sample->length = 0;
-			}
-		}
-	}
-	
-	if (sources!=NULL) {
-		for (unsigned int i=0; i<MAX_SOURCES; i++) {
-			source=&sources[i];
-			
-			source->state     = STATE_NONE;
-			source->sample_id = 0;
-			source->position  = 0;
-			source->dampen    = 1;
-		}
-	}
-}
-
 void ice_audio_buffer() {
 	if (samples==NULL || sources==NULL) {
 		return;
@@ -135,9 +110,12 @@ void ice_audio_buffer() {
 			source = &sources[i];
 			sample = &samples[source->sample_id];
 			
-			if (source->state>STATE_PAUSED && sample->data!=NULL) {
+			if (
+				sample->data!=NULL &&
+				source->state>STATE_PAUSED 
+			) {
 				mix_a = (unsigned int)dsp_dma_buffer[dsp_dma_buffer_offset];
-				mix_b = (unsigned int)sample->data[source->position]/source->dampen;
+				mix_b = (unsigned int)sample->data[source->position];///source->volume;
 				mix_c = (mix_a+mix_b)/2;
 				
 				dsp_dma_buffer[dsp_dma_buffer_offset]=(unsigned char)mix_c;
@@ -145,7 +123,10 @@ void ice_audio_buffer() {
 				source->position += 1;
 				source->position %= sample->length;
 				
-				if (source->position==0 && source->state==STATE_PLAYING) {
+				if (
+					source->position==0 &&
+					source->state==STATE_PLAYING
+				) {
 					source->state=STATE_PAUSED;
 				}
 			} 
@@ -195,7 +176,7 @@ ice_uint ice_audio_init() {
 				port_offset!=7 && 
 				dsp_reset(0x200+(port_offset<<4))
 			) {
-				ice_char msg[256];
+				ice_char msg[64];
 				sprintf(
 					(char *)msg,
 					"Detected Sound Blaster: %X",
@@ -217,7 +198,7 @@ ice_uint ice_audio_init() {
 	
 	{ //Allocate sound buffer
 		{
-			ice_char msg[256];
+			ice_char msg[64];
 			sprintf(
 				(char *)msg,
 				"Allocating DMA with %d bytes",
@@ -282,7 +263,7 @@ ice_uint ice_audio_init() {
 		
 		dsp_write(0xD1); //DSP-command D1h - Enable speaker
 		dsp_write(0x40); //DSP-command 40h - Set sample frequency
-		dsp_write(225);  //Write time constant
+		dsp_write(210);  //Write time constant
 		//65536 - (256000000/(channels * sample rate))
 		// 210 = 22 KHz | 225 = 32KHz | 233 = 44 KHz
 		
@@ -351,7 +332,8 @@ void ice_audio_deinit() {
 		dsp_dma_buffer=NULL;
 	}
 	
-	ice_audio_flush();
+	ice_audio_sample_flush();
+	ice_audio_source_flush();
 	
 	if (samples!=NULL) {
 		free(samples);
@@ -364,7 +346,17 @@ void ice_audio_deinit() {
 	}
 }
 
-ice_uint ice_audio_sample_load(ice_uint file_id) {
+void ice_audio_sample_flush() {
+	if (samples!=NULL) {
+		for (ice_uint i=0; i<MAX_SAMPLES; i++) {
+			ice_audio_sample_delete(i);
+		}
+	}
+}
+
+ice_uint ice_audio_sample_load(
+	ice_uint file_id
+) {
 	if (samples==NULL) {
 		return 0;
 	}
@@ -392,23 +384,38 @@ ice_uint ice_audio_sample_load(ice_uint file_id) {
 	wav_file=fopen(filename, "rb");
 	
 	if (wav_file==NULL) {
-		{
-			ice_char msg[256];
-			sprintf(
-				(char *)msg,
-				"Failed to load audio sample: %d",
-				file_id
-			);
-			ice_log(msg);
-		}
+		ice_char msg[64];
+		sprintf(
+			(char *)msg,
+			"Failed to open audio sample: %d",
+			file_id
+		);
+		ice_log(msg);
 		
 		return 0;
 	}
 	
 	fseek(wav_file,40L,SEEK_SET);
-	sample->length=getw(wav_file);
 	
-	sample->data=(unsigned char *)malloc(sample->length);
+	sample->length = getw(wav_file);
+	sample->data   = (unsigned char *)malloc(sample->length);
+	sample->rate   = 22050;
+	
+	if (sample->data==NULL) {
+		ice_char msg[64];
+		sprintf(
+			(char *)msg,
+			"Failed to allocate audio sample: %d",
+			file_id
+		);
+		ice_log(msg);
+		
+		fclose(wav_file);
+		
+		sample->length=0;
+		
+		return 0;
+	}
 	
 	fseek(wav_file,44L,SEEK_SET); 
 	fread(sample->data,1,sample->length,wav_file);
@@ -434,10 +441,11 @@ void ice_audio_sample_delete(
 	free(sample->data);
 	
 	sample->data   = NULL;
+	sample->rate   = 0;
 	sample->length = 0;
 }
 
-ice_uint ice_audio_sample_length_get(
+ice_real ice_audio_sample_length_get(
 	ice_uint sample_id
 ) {
 	if (
@@ -450,7 +458,15 @@ ice_uint ice_audio_sample_length_get(
 	
 	audio_sample *sample=&samples[sample_id];
 	
-	return sample->length;
+	return (ice_real)sample->length/sample->rate;
+}
+
+void ice_audio_source_flush() {
+	if (sources!=NULL) {
+		for (ice_uint i=0; i<MAX_SOURCES; i++) {
+			ice_audio_source_delete(i);
+		}
+	}
 }
 
 ice_uint ice_audio_source_new() {
@@ -465,7 +481,7 @@ ice_uint ice_audio_source_new() {
 			source->state     = STATE_PAUSED;
 			source->sample_id = 0;
 			source->position  = 0;
-			source->dampen    = 1;
+			source->volume    = 255;
 			
 			return (ice_uint)i;
 		}
@@ -490,7 +506,7 @@ void ice_audio_source_delete(
 	source->state     = STATE_NONE;
 	source->sample_id = 0;
 	source->position  = 0;
-	source->dampen    = 1;
+	source->volume    = 255;
 }
 
 ice_uint ice_audio_source_sample_get(
@@ -526,7 +542,7 @@ void ice_audio_source_sample_set(
 	source->position  = 0;
 }
 
-ice_uint ice_audio_source_position_get(
+ice_real ice_audio_source_position_get(
 	ice_uint source_id
 ) {
 	if (
@@ -537,12 +553,24 @@ ice_uint ice_audio_source_position_get(
 		return 0;
 	}
 	
-	return (ice_uint)sources[source_id].position;
+	audio_source *source=&sources[source_id];
+	
+	ice_uint sample_id   = source->sample_id;
+	audio_sample *sample = &samples[sample_id];
+	
+	if (
+		sample_id>=MAX_SAMPLES ||
+		sample->data==NULL
+	) {
+		return 0;
+	}
+	
+	return (ice_real)sources[source_id].position/sample->rate;
 }
 
 void ice_audio_source_position_set(
 	ice_uint source_id,
-	ice_uint position
+	ice_real position
 ) {
 	if (
 		sources==NULL || 
@@ -554,15 +582,24 @@ void ice_audio_source_position_set(
 	
 	audio_source *source=&sources[source_id];
 	
+	ice_uint sample_id   = source->sample_id;
+	audio_sample *sample = &samples[sample_id];
+	
 	if (
-		source->sample_id<MAX_SAMPLES
+		sample_id>=MAX_SAMPLES ||
+		sample->data==NULL
 	) {
-		audio_sample *sample=&samples[source->sample_id];
-		
-		if (sample->data!=NULL) {
-			source->position=position%sample->length;
-		}
+		return;
 	}
+	
+	ice_uint sample_position = (ice_uint)(
+		position*(ice_real)sample->rate
+	);
+	
+	source->position=MAX(
+		sample_position,
+		sample->length
+	);
 }
 
 ice_char ice_audio_source_state_get(
@@ -605,7 +642,7 @@ void ice_audio_source_state_set(
 	}
 }
 
-ice_uint ice_audio_source_volume_get( //TODO
+ice_real ice_audio_source_volume_get(
 	ice_uint source_id
 ) {
 	if (
@@ -616,12 +653,12 @@ ice_uint ice_audio_source_volume_get( //TODO
 		return 0;
 	}
 	
-	return sources[source_id].dampen*100/255;
+	return (ice_real)sources[source_id].volume/255;
 }
 
-void ice_audio_source_volume_set( //TODO
+void ice_audio_source_volume_set(
 	ice_uint source_id,
-	ice_uint volume
+	ice_real volume
 ) {
 	if (
 		sources==NULL || 
@@ -631,9 +668,8 @@ void ice_audio_source_volume_set( //TODO
 		return;
 	}
 	
-	if (volume>100) {
-		volume=100;
-	}
+	volume = MAX(volume,0);
+	volume = MIN(volume,1);
 	
-	sources[source_id].dampen=volume*255/100;
+	sources[source_id].volume=(ice_char)(volume*255);
 }
