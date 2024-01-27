@@ -3,17 +3,16 @@
 
 ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO) programming language.
 
-![Graphics Demo](https://i.imgur.com/NrV2MBO.png)
+<img src="/screenshots/triangle.png?raw=true">
 
 **NOTE:** This engine is still far from complete and needs a lot more work done!
 
 ## 3D Example
-![3D Demo](https://i.imgur.com/J9VvXu9.gif)
 
-![Miku Demo](https://i.imgur.com/OlQvPnX.gif)
+<img src="/screenshots/miku.gif?raw=true">
 
 ## Features:
-- SoundBlaster 16 (8 bit unsigned mono audio @ 32KHz)
+- SoundBlaster 16 (8 bit unsigned mono audio @ 22KHz)
 - 256 mixed samples
 - VESA mode 10Dh (320x200x15)
 - 256 32 bit texture buffer + Optional Z buffer
@@ -38,7 +37,7 @@ You can compile a demo program by running ``make MAIN=demos/<filename>.c`` in th
 
 You can find the examples under [demos](src/demos)
 
-Before running, make sure you have [CWSDPMI.EXE](http://sandmann.dotster.com/cwsdpmi/) in the same location as the demo program!
+Before running, make sure you have [CWSDPMI.EXE](http://sandmann.dotster.com/cwsdpmi/) in the same location as the program!
 
 ## License
 This software is free to use. You can modify it and redistribute it under the terms of the 
