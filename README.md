@@ -1,5 +1,5 @@
 # ICE
-![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg) ![VERSION](https://img.shields.io/badge/BUILD-3-blue)
+![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg)
 
 ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO) programming language.
 
