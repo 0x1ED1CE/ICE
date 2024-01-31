@@ -1,7 +1,7 @@
 # ICE
 ![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg)
 
-ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO) programming language.
+ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO) bytecode.
 
 <img src="/screenshots/triangle.png?raw=true">
 
@@ -20,7 +20,6 @@ ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional
 
 ## TODO:
 - File handling
-- ISO bindings
 - Near clipping
 - Perspective correct texture mapping
 - [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
