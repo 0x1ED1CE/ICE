@@ -250,5 +250,5 @@ ice_uint ice_update(
 	
 	move_camera((lmath_real)tick);
 	
-	return ice_input_get(0,0x01)!=1.0f;
+	return ice_input_get(0,0x01)==1.0f;
 }

@@ -1,7 +1,7 @@
 #ifndef ICE_H
 #define ICE_H
 
-#define ICE_VERSION 4
+#define ICE_VERSION 9
 
 typedef unsigned char ice_char;
 typedef unsigned int  ice_uint;

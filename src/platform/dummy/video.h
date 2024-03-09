@@ -1,35 +1,38 @@
-#ifndef ICE_VIDEO_H
-#define ICE_VIDEO_H
-
-#define ICE_TEXTURE_ATTRIBUTE_WRITE 0x01
-#define ICE_TEXTURE_ATTRIBUTE_COLOR 0x02
-#define ICE_TEXTURE_ATTRIBUTE_DEPTH 0x03
-
 ice_uint ice_video_texture_new(
 	ice_uint width,
 	ice_uint height,
 	ice_uint attributes
-);
+) {
+	return 0;
+}
 
 ice_uint ice_video_texture_load(
 	ice_uint file_id
-);
+) {
+	return 0;
+}
 
 void ice_video_texture_delete(
 	ice_uint texture_id
-);
+) {
+}
 
 ice_uint ice_video_texture_width_get(
 	ice_uint texture_id
-);
+) {
+	return 0;
+}
 
 ice_uint ice_video_texture_height_get(
 	ice_uint texture_id
-);
+) {
+	return 0;
+}
 
 void ice_video_texture_clear(
 	ice_uint texture_id
-);
+) {
+}
 
 void ice_video_texture_rectangle_draw(
 	ice_uint d_texture_id,
@@ -46,7 +49,8 @@ void ice_video_texture_rectangle_draw(
 	ice_real c_ag,
 	ice_real c_ab,
 	ice_real c_aa
-);
+) {
+}
 
 void ice_video_texture_triangle_draw(
 	ice_uint d_texture_id,
@@ -78,52 +82,67 @@ void ice_video_texture_triangle_draw(
 	ice_real c_cg,
 	ice_real c_cb,
 	ice_real c_ca
-);
+) {
+}
 
 ice_uint ice_video_vertex_new(
 	ice_uint size
-);
+) {
+	return 0;
+}
 
 void ice_video_vertex_delete(
 	ice_uint vertex_id
-);
+) {
+}
 
 ice_uint ice_video_vertex_size_get(
 	ice_uint vertex_id
-);
+) {
+	return 0;
+}
 
 void ice_video_vertex_set_uint(
 	ice_uint vertex_id,
 	ice_uint index,
 	ice_uint value
-);
+) {
+}
 
 ice_uint ice_video_vertex_get_uint(
 	ice_uint vertex_id,
 	ice_uint index
-);
+) {
+	return 0;
+}
 
 void ice_video_vertex_set_sint(
 	ice_uint vertex_id,
 	ice_uint index,
 	ice_sint value
-);
+) {
+}
 
 ice_sint ice_video_vertex_get_sint(
 	ice_uint vertex_id,
 	ice_uint index
-);
+) {
+	return 0;
+}
 
 void ice_video_vertex_set_real(
 	ice_uint vertex_id,
 	ice_uint index,
 	ice_real value
-);
+) {
+}
 
 ice_real ice_video_vertex_get_real(
 	ice_uint vertex_id,
 	ice_uint index
-);
+) {
+	return 0;
+}
 
 void ice_video_vertex_texture_draw(
 	ice_uint d_texture_id,
@@ -132,19 +151,24 @@ void ice_video_vertex_texture_draw(
 	ice_uint position_vertex_id,
 	ice_uint texture_vertex_id,
 	ice_uint face_vertex_id
-);
+) {
+}
 
-void ice_video_texture_flush();
+void ice_video_texture_flush() {
+}
 
-void ice_video_vertex_flush();
+void ice_video_vertex_flush() {
+}
 
-void ice_video_buffer();
+void ice_video_buffer() {
+}
 
 ice_uint ice_video_init(
 	ice_uint width,
 	ice_uint height
-);
+) {
+	return 0;
+}
 
-void ice_video_deinit();
-
-#endif
+void ice_video_deinit() {
+}
