@@ -19,9 +19,8 @@ ICE (ISO/C Engine) is a DOS 3D game engine written entirely in C99 with optional
 - 3D triangle rasterization
 
 ## TODO:
+- 3dfx Glide support
 - File handling
-- Near clipping
-- Perspective correct texture mapping
 - [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
 - Joystick support
 - SDL2 implementation
