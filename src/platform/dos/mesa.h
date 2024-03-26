@@ -542,8 +542,6 @@ void ice_video_model_draw(
 	glBindTexture(GL_TEXTURE_2D,0);
 	glDisable(GL_TEXTURE_2D);
 	glDisable(GL_BLEND);
-	
-	ice_log((ice_char *)"DONE RENDERING");
 }
 
 void ice_video_texture_flush() {
