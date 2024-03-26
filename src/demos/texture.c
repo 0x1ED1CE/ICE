@@ -7,16 +7,12 @@
 void ice_init() {
 	ice_uint texture = ice_video_texture_load(0);
 	
-	ice_video_texture_triangle_draw(
+	ice_video_texture_rectangle_draw(
 		0, texture,
-		0.5, 0.2, 0,
-		0.2, 0.8, 0,
-		0.8, 0.8, 0,
 		0, 0,
-		0, 1,
 		1, 1,
-		1, 0, 0, 1,
-		0, 1, 0, 1,
+		0, 0,
+		1, 1,
 		0, 0, 1, 1
 	);
 }

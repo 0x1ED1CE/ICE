@@ -125,7 +125,7 @@ clean:
 	glad.o \
 	ice.o
 	
-	$(MAKE) \
-	-f Makefile.DJ \
-	-C F:\etc\projects\ice\v8\src\lib\mesa \
-	clean
+#	$(MAKE) \
+#	-f Makefile.DJ \
+#	-C F:\etc\projects\ice\v8\src\lib\mesa \
+#	clean

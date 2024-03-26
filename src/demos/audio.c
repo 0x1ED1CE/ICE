@@ -12,10 +12,10 @@ void print_graphics(
 	ice_sint x,
 	ice_sint y,
 	ice_char *text,
-	ice_char c_ar,
-	ice_char c_ag,
-	ice_char c_ab,
-	ice_char c_aa
+	ice_real c_ar,
+	ice_real c_ag,
+	ice_real c_ab,
+	ice_real c_aa
 ) {
 	if (text==NULL) {
 		return;
@@ -30,19 +30,20 @@ void print_graphics(
 	while (ch!='\0') {
 		ch-=32;
 		
-		lookup_x = (ch%16)*font_texture_width;
-		lookup_y = (ch/16)*font_texture_height;
+		lookup_x = (ch%12)*font_texture_width;
+		lookup_y = (ch/12)*font_texture_height;
 		
 		ice_video_texture_rectangle_draw(
 			d_texture_id,
 			font_texture_id,
-			x, y,
-			x+font_texture_width-1,
-			y+font_texture_height-1,
-			lookup_x,
-			lookup_y,
-			lookup_x+font_texture_width-1,
-			lookup_y+font_texture_height-1,
+			(ice_real)x/320, 
+			(ice_real)y/200,
+			(ice_real)(x+font_texture_width-1)/320,
+			(ice_real)(y+font_texture_height-1)/200,
+			(ice_real)lookup_x/144,
+			(ice_real)lookup_y/144,
+			(ice_real)(lookup_x+font_texture_width-1)/144,
+			(ice_real)(lookup_y+font_texture_height-1)/144,
 			c_ar, c_ag, c_ab, c_aa
 		);
 		
@@ -72,7 +73,7 @@ void ice_init() {
 		12, 16,
 		57, 91,
 		(ice_char *)"Press ESC to exit",
-		255, 255, 255, 255
+		1, 1, 1, 1
 	);
 }
 

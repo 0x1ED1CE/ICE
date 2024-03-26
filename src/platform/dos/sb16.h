@@ -251,44 +251,41 @@ ice_uint ice_audio_init() {
 	{ //Enable playback
 		ice_log((ice_char*)"Initializing DSP...");
 		
+		outportb(0x0A,0x04+dsp_dma); //Disable DMA channel
+		outportb(0x0C,1);            //Clear byte pointer
+		outportb(0x0B,0x58+dsp_dma); //Set mode 0x48 = single | 0x58 = auto mode + channel
+		
 		dsp_write(0xD1); //DSP-command D1h - Enable speaker
 		dsp_write(0x40); //DSP-command 40h - Set sample frequency
 		dsp_write(210);  //Write time constant
-		//65536 - (256000000/(channels * sample rate))
 		// 210 = 22 KHz | 225 = 32KHz | 233 = 44 KHz
 		
 		//Convert pointer to linear address
 		unsigned int page   = dos_dma_buffer_offset>>16;    //Calculate page
 		unsigned int offset = dos_dma_buffer_offset&0xFFFF; //Calculate offset in the page
-		
-		outportb(0x0A,4|dsp_dma);    //Mask DMA channel
-		outportb(0x0C,0);            //Clear byte pointer
-		outportb(0x0B,0x58|dsp_dma); //Set mode
 
-		outportb(dsp_dma<<1,offset&0xFF); //Write the offset to the DMA controller
+		//Write the offset to the DMA controller
+		outportb(dsp_dma<<1,offset&0xFF);
 		outportb(dsp_dma<<1,offset>>8);
 
 		if (dsp_dma==0) outportb(0x87,page);
 		if (dsp_dma==1) outportb(0x83,page);
 		if (dsp_dma==3) outportb(0x82,page);
-
-		outportb( //Set the block length to 0x7FFF = 32 Kbyte
-			(dsp_dma<<1)+1,
-			(BUFFER_SIZE-1)&0xFF
-		);
-		outportb(
-			(dsp_dma<<1)+1,
-			((BUFFER_SIZE-1)>>8)&0xFF
-		);
-		outportb( //Unmask DMA channel
-			0x0A,
-			dsp_dma
-		);
-
-		dsp_write(0x48); //DSP-command 48h - Set block length
-		dsp_write(0xFF); //Set the block length to 0x1FFF = 8 Kbyte
+		
+		//Set the block length
+		outportb((dsp_dma<<1)+1,(BUFFER_SIZE-1)&0xFF);
+		outportb((dsp_dma<<1)+1,((BUFFER_SIZE-1)>>8)&0xFF);
+		
+		//DSP-command 48h - Set block length to 0x1FFF = 8 Kbyte
+		dsp_write(0x48);
+		dsp_write(0xFF);
 		dsp_write(0x1F);
-		dsp_write(0x1C); //DSP-command 1Ch - Start auto-init playback
+		
+		//DSP-command 1Ch - Start auto-init playback
+		dsp_write(0x1C);
+		
+		//Enable DMA channel
+		outportb(0x0A,dsp_dma);
 	}
 	
 	{ //Allocate slots
@@ -306,13 +303,11 @@ ice_uint ice_audio_init() {
 }
 
 void ice_audio_deinit() {
-	//Stops DMA-transfer
-	{
-		ice_log((ice_char*)"Stopping DSP...");
-		
-		dsp_write(0xD0);
-		dsp_write(0xDA);
-	}
+	ice_log((ice_char*)"Stopping DSP...");
+	
+	//Stop DMA-transfer
+	dsp_write(0xD0);
+	dsp_write(0xDA);
 	
 	//Free the memory allocated to the sound buffer
 	if (dsp_dma_buffer!=NULL) {

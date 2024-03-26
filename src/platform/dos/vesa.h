@@ -51,12 +51,12 @@ VESA Super VGA Standard VS911022-8
 #include "lib/etch/etch.h"
 
 #define VIDEO_ADDRESS 0xA0000
-//#define VIDEO_MODE    0x110
-//#define VIDEO_WIDTH   640
-//#define VIDEO_HEIGHT  480
-#define VIDEO_MODE    0x10D
-#define VIDEO_WIDTH   320
-#define VIDEO_HEIGHT  200
+#define VIDEO_MODE    0x110
+#define VIDEO_WIDTH   640
+#define VIDEO_HEIGHT  480
+//#define VIDEO_MODE    0x10D
+//#define VIDEO_WIDTH   320
+//#define VIDEO_HEIGHT  200
 #define VIDEO_BYTES   2
 
 #define MAX_TEXTURES 256
@@ -264,18 +264,6 @@ void vesa_buffer(
 		buffer      += copy_size;
 		bank_number += bank_offset;
 	}
-}
-
-ice_uint ice_video_texture_new(
-	ice_uint width,
-	ice_uint height,
-	ice_uint attributes
-) {
-	return etch_texture_new(
-		(etch_uint)width,
-		(etch_uint)height,
-		(etch_char)attributes&ICE_TEXTURE_ATTRIBUTE_DEPTH
-	);
 }
 
 ice_uint ice_video_texture_load(
@@ -490,7 +478,8 @@ void ice_video_texture_triangle_draw(
 	);
 }
 
-ice_uint ice_video_vertex_new(
+ice_uint ice_video_array_new(
+	ice_uint type,
 	ice_uint size
 ) {
 	return (ice_uint)etch_vertex_new(
@@ -498,7 +487,7 @@ ice_uint ice_video_vertex_new(
 	);
 }
 
-void ice_video_vertex_delete(
+void ice_video_array_delete(
 	ice_uint vertex_id
 ) {
 	etch_vertex_free(
@@ -506,7 +495,7 @@ void ice_video_vertex_delete(
 	);
 }
 
-ice_uint ice_video_vertex_size_get(
+ice_uint ice_video_array_size_get(
 	ice_uint vertex_id
 ) {
 	return (ice_uint)etch_vertex_size_get(
@@ -514,87 +503,43 @@ ice_uint ice_video_vertex_size_get(
 	);
 }
 
-void ice_video_vertex_set_uint(
-	ice_uint vertex_id,
-	ice_uint index,
-	ice_uint value
-) {
-	etch_vertex_set_uint(
-		(etch_uint)vertex_id,
-		(etch_uint)index,
-		(etch_uint)value
-	);
-}
-
-ice_uint ice_video_vertex_get_uint(
-	ice_uint vertex_id,
-	ice_uint index
-) {
-	return (ice_uint)etch_vertex_get_uint(
-		(etch_uint)vertex_id,
-		(etch_uint)index
-	);
-}
-
-void ice_video_vertex_set_sint(
-	ice_uint vertex_id,
-	ice_uint index,
-	ice_sint value
-) {
-	etch_vertex_set_sint(
-		(etch_uint)vertex_id,
-		(etch_uint)index,
-		(etch_sint)value
-	);
-}
-
-ice_sint ice_video_vertex_get_sint(
-	ice_uint vertex_id,
-	ice_uint index
-) {
-	return (ice_sint)etch_vertex_get_sint(
-		(etch_uint)vertex_id,
-		(etch_uint)index
-	);
-}
-
-void ice_video_vertex_set_real(
-	ice_uint vertex_id,
+void ice_video_array_set(
+	ice_uint array_id,
 	ice_uint index,
 	ice_real value
 ) {
 	etch_vertex_set_real(
-		(etch_uint)vertex_id,
+		(etch_uint)array_id,
 		(etch_uint)index,
 		(etch_real)value
 	);
 }
 
-ice_real ice_video_vertex_get_real(
-	ice_uint vertex_id,
+ice_real ice_video_array_get(
+	ice_uint array_id,
 	ice_uint index
 ) {
 	return (ice_real)etch_vertex_get_real(
-		(etch_uint)vertex_id,
+		(etch_uint)array_id,
 		(etch_uint)index
 	);
 }
 
-void ice_video_vertex_texture_draw(
+void ice_video_array_texture_draw(
 	ice_uint d_texture_id,
 	ice_uint s_texture_id,
-	ice_real render_matrix[4][4],
-	ice_uint position_vertex_id,
-	ice_uint texture_vertex_id,
-	ice_uint face_vertex_id
+	ice_uint matrix_array_id,
+	ice_uint position_array_id,
+	ice_uint texture_array_id,
+	ice_uint face_array_id
 ) {
 	etch_vertex_texture_draw(
 		(etch_uint)d_texture_id,
 		(etch_uint)s_texture_id,
 		(etch_real (*)[4])render_matrix,
-		(etch_uint)position_vertex_id,
-		(etch_uint)texture_vertex_id,
-		(etch_uint)face_vertex_id
+		(etch_uint)position_array_id,
+		(etch_uint)texture_array_id,
+		(etch_uint)face_array_id
 	);
 }
 
@@ -602,7 +547,7 @@ void ice_video_texture_flush() {
 	etch_texture_flush();
 }
 
-void ice_video_vertex_flush() {
+void ice_video_array_flush() {
 	etch_vertex_flush();
 }
 

@@ -53,12 +53,12 @@ int main() {
 	while (1) {
 		frame_start = ice_clock_get();
 		
-		ice_audio_buffer();
-		ice_video_buffer();
-		
 		if (ice_update(frame_rate)) {
 			break;
 		}
+		
+		ice_audio_buffer();
+		ice_video_buffer();
 		
 		frame_rate = ice_clock_get()-frame_start;
 	}

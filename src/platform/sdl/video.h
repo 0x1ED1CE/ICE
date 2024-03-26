@@ -90,79 +90,49 @@ void ice_video_texture_triangle_draw(
 ) {
 }
 
-ice_uint ice_video_vertex_new(
+ice_uint ice_video_array_new(
+	ice_uint type,
 	ice_uint size
 ) {
 	return 0;
 }
 
-void ice_video_vertex_delete(
-	ice_uint vertex_id
+void ice_video_array_delete(
+	ice_uint array_id
 ) {
 }
 
-ice_uint ice_video_vertex_size_get(
-	ice_uint vertex_id
-) {
-	return 0;
-}
-
-void ice_video_vertex_set_uint(
-	ice_uint vertex_id,
-	ice_uint index,
-	ice_uint value
-) {
-}
-
-ice_uint ice_video_vertex_get_uint(
-	ice_uint vertex_id,
-	ice_uint index
+ice_uint ice_video_array_size_get(
+	ice_uint array_id
 ) {
 	return 0;
 }
 
-void ice_video_vertex_set_sint(
-	ice_uint vertex_id,
-	ice_uint index,
-	ice_sint value
-) {
-}
-
-ice_sint ice_video_vertex_get_sint(
-	ice_uint vertex_id,
-	ice_uint index
-) {
-	return 0;
-}
-
-void ice_video_vertex_set_real(
-	ice_uint vertex_id,
+void ice_video_array_set(
+	ice_uint array_id,
 	ice_uint index,
 	ice_real value
 ) {
 }
 
-ice_real ice_video_vertex_get_real(
-	ice_uint vertex_id,
+ice_real ice_video_array_get(
+	ice_uint array_id,
 	ice_uint index
 ) {
 	return 0;
 }
 
-void ice_video_vertex_texture_draw(
+void ice_video_array_model_draw(
 	ice_uint d_texture_id,
 	ice_uint s_texture_id,
-	ice_real render_matrix[4][4],
-	ice_uint position_vertex_id,
-	ice_uint texture_vertex_id,
-	ice_uint face_vertex_id
+	ice_uint model_array_id
 ) {
 }
 
 void ice_video_texture_flush() {
 }
 
-void ice_video_vertex_flush() {
+void ice_video_array_flush() {
 }
 
 void ice_video_buffer() {
