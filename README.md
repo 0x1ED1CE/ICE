@@ -7,23 +7,25 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 
 **NOTE:** This engine is still far from complete and needs a lot more work done!
 
-## 3D Example
+## Examples
+**Software Rendering**
 
 <img src="/screenshots/miku.gif?raw=true">
 
+**Rendering using 3dfx Voodoo**
+
+<img src="/screenshots/snwiaXw.gif?raw=true">
+
 ## Features:
+- 3D software rendering
+- 3dfx Voodoo
 - SoundBlaster 16 (8 bit unsigned mono audio @ 22KHz)
-- 256 mixed samples
-- VESA mode 10Dh (320x200x15)
-- 256 32 bit texture buffer + Optional Z buffer
-- 3D triangle rasterization
+- Keyboard input
 
 ## TODO:
-- 3dfx Glide support
-- File handling
 - [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
 - Joystick support
-- SDL2 implementation
+- SDL2 backend
 
 ## Might Do
 - Lua scripting support
