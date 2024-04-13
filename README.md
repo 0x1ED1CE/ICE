@@ -13,13 +13,16 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 
 ## TODO:
 - Mouse support
-- [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
 - Joystick support
+- [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
+- Physics engine
+- Asset pipeline
 - SDL2 backend
 - Documentation
 
 ## Might Do
 - Lua scripting support
+- Game editor
 
 ## Examples
 **Software rendered triangle in 320x200**
@@ -31,7 +34,7 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 <img src="/screenshots/snwiaXw.gif?raw=true">
 
 ## How to build
-You will need [DJGPP](https://github.com/andrewwutw/build-djgpp) and gmake to compile.
+You will need [DJGPP](https://github.com/andrewwutw/build-djgpp) and make to compile.
 
 You can compile a demo program by running ``make MAIN=demos/<filename>.c`` in the source folder
 
