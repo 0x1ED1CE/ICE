@@ -5,6 +5,10 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 
 **NOTE:** This engine is still far from complete and needs a lot more work done!
 
+## Screenshot
+
+<img src="/screenshots/world.png?raw=true">
+
 ## Features:
 - 3D software rendering (mode 110h / 10Dh)
 - 3D hardware acceleration via 3dfx Voodoo
@@ -23,15 +27,6 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 ## Might Do
 - Lua scripting support
 - Game editor
-
-## Examples
-**Software rendered triangle in 320x200**
-
-<img src="/screenshots/triangle.png?raw=true">
-
-**Hatsune Miku rendered using 3dfx Voodoo**
-
-<img src="/screenshots/snwiaXw.gif?raw=true">
 
 ## How to build
 You will need [DJGPP](https://github.com/andrewwutw/build-djgpp) and make to compile.
