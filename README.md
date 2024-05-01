@@ -25,8 +25,9 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 - Documentation
 
 ## Might Do
+- Video playback
 - Lua scripting support
-- Game editor
+- Basic editor
 
 ## How to build
 You will need [DJGPP](https://github.com/andrewwutw/build-djgpp) and make to compile.
