@@ -5,7 +5,6 @@
 #include "ice.h"
 
 void print_graphics(
-	ice_uint d_texture_id,
 	ice_uint font_texture_id,
 	ice_sint font_texture_width,
 	ice_sint font_texture_height,
@@ -34,7 +33,6 @@ void print_graphics(
 		lookup_y = (ch/12)*font_texture_height;
 		
 		ice_video_texture_rectangle_draw(
-			d_texture_id,
 			font_texture_id,
 			(ice_real)x/320, 
 			(ice_real)y/200,
@@ -65,11 +63,11 @@ void ice_init() {
 	
 	ice_audio_source_state_set(
 		source,
-		STATE_PLAYING
+		ICE_SOURCE_STATE_PLAYING
 	);
 	
 	print_graphics(
-		0, font,
+		font,
 		12, 16,
 		57, 91,
 		(ice_char *)"Press ESC to exit",

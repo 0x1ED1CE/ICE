@@ -14,7 +14,6 @@ all: $(PLATFORM)
 
 DOS: \
 	ice.o \
-	etch.o \
 	iso_vm.o \
 	bindings/iso/iso_aux.h \
 	bindings/iso/iso_ice_clock.h \
@@ -24,7 +23,6 @@ DOS: \
 	bindings/iso/iso_ice_cache.h \
 	platform/dos/clock.h \
 	platform/dos/video.h \
-	platform/dos/vesa.h \
 	platform/dos/mesa.h \
 	platform/dos/audio.h \
 	platform/dos/sb16.h \
@@ -38,7 +36,6 @@ DOS: \
 	-I../src/demos \
 	$(MAIN) \
 	ice.o \
-	etch.o \
 	iso_vm.o \
 	$(LIBS) \
 	-o $(BIN)

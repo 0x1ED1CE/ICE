@@ -57,8 +57,8 @@ int main() {
 			break;
 		}
 		
-		ice_audio_buffer();
-		ice_video_buffer();
+		ice_audio_buffer(frame_rate);
+		ice_video_buffer(frame_rate);
 		
 		frame_rate = ice_clock_get()-frame_start;
 	}

@@ -3,14 +3,6 @@
 static SDL_Window* sdl_window = NULL;
 static SDL_GLContext gl_context;
 
-ice_uint ice_video_texture_new(
-	ice_uint width,
-	ice_uint height,
-	ice_uint attributes
-) {
-	return 0;
-}
-
 ice_uint ice_video_texture_load(
 	ice_uint file_id
 ) {
@@ -34,14 +26,8 @@ ice_uint ice_video_texture_height_get(
 	return 0;
 }
 
-void ice_video_texture_clear(
-	ice_uint texture_id
-) {
-}
-
 void ice_video_texture_rectangle_draw(
-	ice_uint d_texture_id,
-	ice_uint s_texture_id,
+	ice_uint texture_id,
 	ice_real d_ax,
 	ice_real d_ay,
 	ice_real d_bx,
@@ -58,8 +44,7 @@ void ice_video_texture_rectangle_draw(
 }
 
 void ice_video_texture_triangle_draw(
-	ice_uint d_texture_id,
-	ice_uint s_texture_id,
+	ice_uint texture_id,
 	ice_real d_ax,
 	ice_real d_ay,
 	ice_real d_az,
@@ -122,9 +107,9 @@ ice_real ice_video_array_get(
 	return 0;
 }
 
-void ice_video_array_model_draw(
-	ice_uint d_texture_id,
-	ice_uint s_texture_id,
+void iice_video_model_draw(
+	ice_uint texture_id,
+	ice_uint projection_array_id,
 	ice_uint model_array_id
 ) {
 }

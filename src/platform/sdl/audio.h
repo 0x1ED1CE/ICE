@@ -6,11 +6,6 @@
 #define MAX_SAMPLES 32
 #define MAX_SOURCES 64
 
-#define STATE_NONE    0
-#define STATE_PAUSED  1
-#define STATE_PLAYING 2
-#define STATE_LOOP    3
-
 typedef struct {
 	unsigned char *data;
 	unsigned int   rate;
@@ -50,7 +45,7 @@ void sdl_audio_buffer(
 
 			if (
 				sample->data!=NULL &&
-				source->state>STATE_PAUSED
+				source->state>ICE_SOURCE_STATE_PAUSED
 			) {
 				mix_a = (unsigned int)stream[i];
 				mix_b = (unsigned int)sample->data[source->position];
@@ -63,9 +58,9 @@ void sdl_audio_buffer(
 
 				if (
 					source->position==0 &&
-					source->state==STATE_PLAYING
+					source->state==ICE_SOURCE_STATE_PLAYING
 				) {
-					source->state=STATE_PAUSED;
+					source->state=ICE_SOURCE_STATE_PAUSED;
 				}
 			}
 		}
@@ -255,10 +250,10 @@ ice_uint ice_audio_source_new() {
 	}
 
 	for (unsigned int i=0; i<MAX_SOURCES; i++) {
-		if (sources[i].state==STATE_NONE) {
+		if (sources[i].state==ICE_SOURCE_STATE_NONE) {
 			audio_source *source=&sources[i];
 
-			source->state     = STATE_PAUSED;
+			source->state     = ICE_SOURCE_STATE_PAUSED;
 			source->sample_id = 0;
 			source->position  = 0;
 			source->volume    = 255;
@@ -276,14 +271,14 @@ void ice_audio_source_delete(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return;
 	}
 
 	audio_source *source=&sources[source_id];
 
-	source->state     = STATE_NONE;
+	source->state     = ICE_SOURCE_STATE_NONE;
 	source->sample_id = 0;
 	source->position  = 0;
 	source->volume    = 255;
@@ -295,7 +290,7 @@ ice_uint ice_audio_source_sample_get(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return 0;
 	}
@@ -311,7 +306,7 @@ void ice_audio_source_sample_set(
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sample_id>=MAX_SAMPLES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return;
 	}
@@ -328,7 +323,7 @@ ice_real ice_audio_source_position_get(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return 0;
 	}
@@ -355,7 +350,7 @@ void ice_audio_source_position_set(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return;
 	}
@@ -388,7 +383,7 @@ ice_char ice_audio_source_state_get(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return 0;
 	}
@@ -403,7 +398,7 @@ void ice_audio_source_state_set(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return;
 	}
@@ -411,14 +406,14 @@ void ice_audio_source_state_set(
 	audio_source *source=&sources[source_id];
 
 	switch(state) {
-		case STATE_PAUSED:
-			source->state=STATE_PAUSED;
+		case ICE_SOURCE_STATE_PAUSED:
+			source->state=ICE_SOURCE_STATE_PAUSED;
 			break;
-		case STATE_PLAYING:
-			source->state=STATE_PLAYING;
+		case ICE_SOURCE_STATE_PLAYING:
+			source->state=ICE_SOURCE_STATE_PLAYING;
 			break;
-		case STATE_LOOP:
-			source->state=STATE_LOOP;
+		case ICE_SOURCE_STATE_LOOP:
+			source->state=ICE_SOURCE_STATE_LOOP;
 	}
 }
 
@@ -428,7 +423,7 @@ ice_real ice_audio_source_volume_get(
    if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return 0;
 	}
@@ -443,7 +438,7 @@ void ice_audio_source_volume_set(
 	if (
 		sources==NULL ||
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_SOURCE_STATE_NONE
 	) {
 		return;
 	}

@@ -8,7 +8,7 @@ void ice_init() {
 	ice_uint texture = ice_video_texture_load(0);
 	
 	ice_video_texture_triangle_draw(
-		0, texture,
+		texture,
 		0.5, 0.2, 0,
 		0.2, 0.8, 0,
 		0.8, 0.8, 0,

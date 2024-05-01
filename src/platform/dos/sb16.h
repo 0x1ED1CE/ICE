@@ -11,6 +11,11 @@
 #include <go32.h>
 #include <dpmi.h>
 
+#ifndef PL_MPEG_IMPLEMENTATION
+#define PL_MPEG_IMPLEMENTATION
+#include "lib/plmpeg/plmpeg.h"
+#endif
+
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
 
@@ -18,11 +23,6 @@
 
 #define MAX_SAMPLES 32
 #define MAX_SOURCES 64
-
-#define STATE_NONE    0
-#define STATE_PAUSED  1
-#define STATE_PLAYING 2
-#define STATE_LOOP    3
 
 typedef struct {
 	unsigned char *data;
@@ -82,7 +82,7 @@ void dsp_write(
   outportb(dsp_port+0xC,value);
 }
 
-void ice_audio_buffer() {
+void ice_audio_buffer(ice_real tick) {
 	if (samples==NULL || sources==NULL) {
 		return;
 	}
@@ -112,7 +112,7 @@ void ice_audio_buffer() {
 			
 			if (
 				sample->data!=NULL &&
-				source->state>STATE_PAUSED 
+				source->state>ICE_AUDIO_STATE_PAUSED 
 			) {
 				mix_a = (unsigned int)dsp_dma_buffer[dsp_dma_buffer_offset];
 				mix_b = (unsigned int)sample->data[source->position];///source->volume;
@@ -125,9 +125,9 @@ void ice_audio_buffer() {
 				
 				if (
 					source->position==0 &&
-					source->state==STATE_PLAYING
+					source->state==ICE_AUDIO_STATE_PLAYING
 				) {
-					source->state=STATE_PAUSED;
+					source->state=ICE_AUDIO_STATE_PAUSED;
 				}
 			} 
 		}
@@ -190,7 +190,7 @@ ice_uint ice_audio_init() {
 		
 		//Sound Blaster not detected
 		if (port_offset==9) {
-			ice_log((ice_char*)"Could not detect Sound Blaster!");
+			ice_log((ice_char*)"Failed to detect Sound Blaster!");
 			
 			return 1;
 		}
@@ -200,7 +200,7 @@ ice_uint ice_audio_init() {
 		_go32_dpmi_seginfo temp_buffer; //Temporary pointer
 		
 		//Assign 32K to DMA Buffer
-		dsp_dma_buffer=(unsigned char *)calloc(
+		dsp_dma_buffer=calloc(
 			BUFFER_SIZE,
 			sizeof(unsigned char)
 		);
@@ -289,11 +289,11 @@ ice_uint ice_audio_init() {
 	}
 	
 	{ //Allocate slots
-		samples=(audio_sample *)calloc(
+		samples=calloc(
 			MAX_SAMPLES,
 			sizeof(audio_sample)
 		);
-		sources=(audio_source *)calloc(
+		sources=calloc(
 			MAX_SOURCES,
 			sizeof(audio_source)
 		);
@@ -381,7 +381,7 @@ ice_uint ice_audio_sample_load(
 	fseek(wav_file,40L,SEEK_SET);
 	
 	sample->length = getw(wav_file);
-	sample->data   = (unsigned char *)malloc(sample->length);
+	sample->data   = malloc(sample->length);
 	sample->rate   = 22050;
 	
 	if (sample->data==NULL) {
@@ -459,10 +459,10 @@ ice_uint ice_audio_source_new() {
 	}
 	
 	for (unsigned int i=0; i<MAX_SOURCES; i++) {
-		if (sources[i].state==STATE_NONE) {
+		if (sources[i].state==ICE_AUDIO_STATE_NONE) {
 			audio_source *source=&sources[i];
 			
-			source->state     = STATE_PAUSED;
+			source->state     = ICE_AUDIO_STATE_PAUSED;
 			source->sample_id = 0;
 			source->position  = 0;
 			source->volume    = 255;
@@ -480,14 +480,14 @@ void ice_audio_source_delete(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
 	
 	audio_source *source=&sources[source_id];
 	
-	source->state     = STATE_NONE;
+	source->state     = ICE_AUDIO_STATE_NONE;
 	source->sample_id = 0;
 	source->position  = 0;
 	source->volume    = 255;
@@ -499,7 +499,7 @@ ice_uint ice_audio_source_sample_get(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
@@ -515,7 +515,7 @@ void ice_audio_source_sample_set(
 		sources==NULL || 
 		source_id>=MAX_SOURCES || 
 		sample_id>=MAX_SAMPLES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
@@ -532,7 +532,7 @@ ice_real ice_audio_source_position_get(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
@@ -559,7 +559,7 @@ void ice_audio_source_position_set(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
@@ -592,7 +592,7 @@ ice_char ice_audio_source_state_get(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
@@ -607,7 +607,7 @@ void ice_audio_source_state_set(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
@@ -615,14 +615,14 @@ void ice_audio_source_state_set(
 	audio_source *source=&sources[source_id];
 	
 	switch(state) {
-		case STATE_PAUSED:
-			source->state=STATE_PAUSED;
+		case ICE_AUDIO_STATE_PAUSED:
+			source->state=ICE_AUDIO_STATE_PAUSED;
 			break;
-		case STATE_PLAYING:
-			source->state=STATE_PLAYING;
+		case ICE_AUDIO_STATE_PLAYING:
+			source->state=ICE_AUDIO_STATE_PLAYING;
 			break;
-		case STATE_LOOP:
-			source->state=STATE_LOOP;
+		case ICE_AUDIO_STATE_LOOP:
+			source->state=ICE_AUDIO_STATE_LOOP;
 	}
 }
 
@@ -632,7 +632,7 @@ ice_real ice_audio_source_volume_get(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
@@ -647,7 +647,7 @@ void ice_audio_source_volume_set(
 	if (
 		sources==NULL || 
 		source_id>=MAX_SOURCES ||
-		sources[source_id].state==STATE_NONE
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}

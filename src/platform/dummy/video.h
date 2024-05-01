@@ -29,14 +29,8 @@ ice_uint ice_video_texture_height_get(
 	return 0;
 }
 
-void ice_video_texture_clear(
-	ice_uint texture_id
-) {
-}
-
 void ice_video_texture_rectangle_draw(
-	ice_uint d_texture_id,
-	ice_uint s_texture_id,
+	ice_uint texture_id,
 	ice_real d_ax,
 	ice_real d_ay,
 	ice_real d_bx,
@@ -53,8 +47,7 @@ void ice_video_texture_rectangle_draw(
 }
 
 void ice_video_texture_triangle_draw(
-	ice_uint d_texture_id,
-	ice_uint s_texture_id,
+	ice_uint texture_id,
 	ice_real d_ax,
 	ice_real d_ay,
 	ice_real d_az,
@@ -118,8 +111,7 @@ ice_real ice_video_array_get(
 }
 
 void ice_video_array_model_draw(
-	ice_uint d_texture_id,
-	ice_uint s_texture_id,
+	ice_uint texture_id,
 	ice_uint projection_array_id,
 	ice_uint model_array_id
 ) {
