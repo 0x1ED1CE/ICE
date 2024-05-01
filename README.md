@@ -19,8 +19,6 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 - Mouse support
 - Joystick support
 - [Covox Speech Thing](https://en.wikipedia.org/wiki/Covox_Speech_Thing) support
-- Physics engine
-- Asset pipeline
 - SDL2 backend
 - Documentation
 
