@@ -17,6 +17,7 @@ ICE is a 3D game engine for DOS written entirely in C99 with optional bindings f
 - Keyboard input
 
 ## TODO:
+- Audio streaming
 - Mouse support
 - Joystick support
 - SDL2 port
