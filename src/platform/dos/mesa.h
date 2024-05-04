@@ -832,8 +832,8 @@ ice_uint ice_video_stream_load(
 		return 0;
 	}
 	
-	plm_set_audio_enabled(plm,0);
-	plm_set_video_enabled(plm,1);
+	plm_set_audio_enabled(plm,FALSE);
+	plm_set_video_enabled(plm,FALSE);
 	
 	ice_uint width  = (ice_uint)plm_get_width(plm);
 	ice_uint height = (ice_uint)plm_get_height(plm);
@@ -885,7 +885,7 @@ void ice_video_stream_delete(
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return;
@@ -909,7 +909,7 @@ ice_real ice_video_stream_length_get(
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return 0;
@@ -927,7 +927,7 @@ ice_real ice_video_stream_width_get(
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return 0;
@@ -945,7 +945,7 @@ ice_real ice_video_stream_height_get(
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return 0;
@@ -963,7 +963,7 @@ ice_real ice_video_stream_position_get(
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return 0;
@@ -982,7 +982,7 @@ void ice_video_stream_position_set(
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return;
@@ -997,34 +997,78 @@ void ice_video_stream_position_set(
 	);
 }
 
-ice_char ice_video_stream_state_get(
+ice_uint ice_video_stream_state_get(
 	ice_uint stream_id
 ) {
 	stream_id>>=16;
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
-		return 0;
+		return ICE_VIDEO_STATE_PAUSED;
 	}
 	
-	return 0;
+	ice_video_stream *stream = &streams[stream_id];
+	
+	if (plm_get_loop(stream->plm)) {
+		return ICE_VIDEO_STATE_LOOP;
+	} else if(plm_get_video_enabled(stream->plm)) {
+		return ICE_VIDEO_STATE_PLAYING;
+	}
+	
+	return ICE_VIDEO_STATE_PAUSED;
 }
 
 void ice_video_stream_state_set(
 	ice_uint stream_id,
-	ice_char state
+	ice_uint state
 ) {
 	stream_id>>=16;
 	
 	if (
 		streams==NULL ||
-		stream_id>MAX_STREAMS ||
+		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
 		return;
+	}
+	
+	ice_video_stream *stream = &streams[stream_id];
+	
+	switch(state) {
+		case ICE_VIDEO_STATE_PAUSED:
+			plm_set_video_enabled(
+				stream->plm,
+				FALSE
+			);
+			plm_set_loop(
+				stream->plm,
+				FALSE
+			);
+			
+			break;
+		case ICE_VIDEO_STATE_PLAYING:
+			plm_set_video_enabled(
+				stream->plm,
+				TRUE
+			);
+			plm_set_loop(
+				stream->plm,
+				FALSE
+			);
+			
+			break;
+		case ICE_VIDEO_STATE_LOOP:
+			plm_set_video_enabled(
+				stream->plm,
+				TRUE
+			);
+			plm_set_loop(
+				stream->plm, 
+				TRUE
+			);
 	}
 }
 
@@ -1067,7 +1111,7 @@ void ice_video_stream_flush() {
 		return;
 	}
 	
-	for (ice_uint i=1; i<MAX_STREAMS; i++) {
+	for (ice_uint i=0; i<MAX_STREAMS; i++) {
 		ice_video_stream_delete(i<<16);
 	}
 }
@@ -1088,36 +1132,47 @@ void ice_video_buffer(ice_real tick) {
 	for (ice_uint i=0; i<MAX_STREAMS; i++) {
 		ice_video_stream *stream=&streams[i];
 		
-		if (stream->plm!=NULL) {
-			int width  = plm_get_width(stream->plm);
-			int height = plm_get_height(stream->plm);
+		if (
+			stream->plm!=NULL && 
+			plm_get_video_enabled(stream->plm)
+		) {
+			int width     = plm_get_width(stream->plm);
+			int height    = plm_get_height(stream->plm);
+			ice_real time = plm_get_time(stream->plm);
 			
-			plm_frame_t *frame=plm_decode_video( //Needs frameskip
-				stream->plm
+			plm_frame_t *frame;
+			
+			do {
+				frame=plm_decode_video(stream->plm);
+			} while (
+				frame!=NULL &&
+				(ice_real)plm_get_time(stream->plm)-time<tick
 			);
 			
-			plm_frame_to_rgb(
-				frame,
-				stream->buffer,
-				(int)width*3
-			);
-			
-			glBindTexture(
-				GL_TEXTURE_2D,
-				textures[stream->texture_id]
-			);
-			glTexSubImage2D(
-				GL_TEXTURE_2D,
-				0,
-				0,
-				0,
-				(GLsizei)width,
-				(GLsizei)height,
-				GL_RGB,
-				GL_UNSIGNED_BYTE,
-				stream->buffer
-			);
-			glBindTexture(GL_TEXTURE_2D,0);
+			if (frame!=NULL) {
+				plm_frame_to_rgb(
+					frame,
+					stream->buffer,
+					(int)width*3
+				);
+				
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textures[stream->texture_id]
+				);
+				glTexSubImage2D(
+					GL_TEXTURE_2D,
+					0,
+					0,
+					0,
+					(GLsizei)width,
+					(GLsizei)height,
+					GL_RGB,
+					GL_UNSIGNED_BYTE,
+					stream->buffer
+				);
+				glBindTexture(GL_TEXTURE_2D,0);
+			}
 		}
 	}
 }
