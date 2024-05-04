@@ -10,6 +10,10 @@
 #define ICE_VIDEO_ARRAY_TYPE_MODEL_2    0x51
 #define ICE_VIDEO_ARRAY_TYPE_MODEL_3    0x52
 
+#define ICE_VIDEO_STATE_PAUSED  0
+#define ICE_VIDEO_STATE_PLAYING 1
+#define ICE_VIDEO_STATE_LOOP    2
+
 ice_uint ice_video_init(
 	ice_uint width,
 	ice_uint height
@@ -155,13 +159,13 @@ void ice_video_stream_position_set(
 	ice_real position
 );
 
-ice_char ice_video_stream_state_get(
+ice_uint ice_video_stream_state_get(
 	ice_uint stream_id
 );
 
 void ice_video_stream_state_set(
 	ice_uint stream_id,
-	ice_char state
+	ice_uint state
 );
 
 void ice_video_depth_set(
