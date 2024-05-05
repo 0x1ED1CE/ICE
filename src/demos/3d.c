@@ -35,7 +35,8 @@ const ice_real cube_uvs[]={
 };
 
 const ice_uint cube_faces[]={
-	1,1,  2,2,  3,3, //V1,T1,V2,T2,V3,T3
+	//V1,T1, V2,T2, V3,T3
+	1,1,  2,2,  3,3,
 	4,4,  5,5,  2,2,
 	6,6,  7,7,  5,5,
 	8,8,  3,9,  7,7,
@@ -59,12 +60,71 @@ lmath_real model[4][4]          = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
 lmath_real render[4][4]         = LMATH_MATRIX_44_IDENTITY_TEMPLATE;
 
 ice_uint projection_id;
-ice_uint vertices_id;
-ice_uint uvs_id;
 ice_uint model_id;
 
 lmath_real camera_rotation[3] = {0,0,0};
 lmath_real camera_position[3] = {0,0,0};
+
+ice_uint load_model(
+	const ice_real *vertices,
+	const ice_real *uvs,
+	const ice_uint *faces,
+	const ice_uint faces_size
+) {
+	ice_uint vertices_id = ice_video_array_new(
+		ICE_ARRAY_TYPE_POSITION_3,
+		(faces_size/6)*9
+	);
+	ice_uint uvs_id = ice_video_array_new(
+		ICE_ARRAY_TYPE_TEXTURE_2,
+		faces_size
+	);
+	ice_uint model_id = ice_video_array_new(
+		ICE_ARRAY_TYPE_MODEL,
+		2
+	);
+	
+	for (
+		ice_uint f_i=0;
+		f_i<faces_size;
+		f_i+=6
+	) {
+		ice_uint v_a_i = (f_i/6)*9;
+		ice_uint t_a_i = f_i;
+		
+		ice_uint v_i = (faces[f_i]-1)*3;
+		ice_video_array_set(vertices_id,v_a_i,vertices[v_i]);
+		ice_video_array_set(vertices_id,v_a_i+1,vertices[v_i+1]);
+		ice_video_array_set(vertices_id,v_a_i+2,vertices[v_i+2]);
+		
+		v_i = (faces[f_i+1]-1)*2;
+		ice_video_array_set(uvs_id,t_a_i,uvs[v_i]);
+		ice_video_array_set(uvs_id,t_a_i+1,uvs[v_i+1]);
+		
+		v_i = (faces[f_i+2]-1)*3;
+		ice_video_array_set(vertices_id,v_a_i+3,vertices[v_i]);
+		ice_video_array_set(vertices_id,v_a_i+4,vertices[v_i+1]);
+		ice_video_array_set(vertices_id,v_a_i+5,vertices[v_i+2]);
+		
+		v_i = (faces[f_i+3]-1)*2;
+		ice_video_array_set(uvs_id,t_a_i+2,uvs[v_i]);
+		ice_video_array_set(uvs_id,t_a_i+3,uvs[v_i+1]);
+		
+		v_i = (faces[f_i+4]-1)*3;
+		ice_video_array_set(vertices_id,v_a_i+6,vertices[v_i]);
+		ice_video_array_set(vertices_id,v_a_i+7,vertices[v_i+1]);
+		ice_video_array_set(vertices_id,v_a_i+8,vertices[v_i+2]);
+		
+		v_i = (faces[f_i+5]-1)*2;
+		ice_video_array_set(uvs_id,t_a_i+4,uvs[v_i]);
+		ice_video_array_set(uvs_id,t_a_i+5,uvs[v_i+1]);
+	}
+	
+	ice_video_array_set(model_id,0,(ice_real)vertices_id);
+	ice_video_array_set(model_id,1,(ice_real)uvs_id);
+	
+	return model_id;
+}
 
 void move_camera(
 	lmath_real tick
@@ -126,57 +186,13 @@ void ice_init() {
 		ICE_ARRAY_TYPE_MATRIX_16,
 		16
 	);
-	vertices_id = ice_video_array_new(
-		ICE_ARRAY_TYPE_POSITION_3,
-		((sizeof(cube_faces)/sizeof(ice_uint))/6)*9
-	);
-	uvs_id = ice_video_array_new(
-		ICE_ARRAY_TYPE_TEXTURE_2,
-		((sizeof(cube_faces)/sizeof(ice_uint))/6)*6
-	);
-	model_id = ice_video_array_new(
-		ICE_ARRAY_TYPE_MODEL,
-		2
-	);
 	
-	for (
-		ice_uint f_i=0;
-		f_i<sizeof(cube_faces)/sizeof(ice_uint);
-		f_i+=6
-	) {
-		ice_uint v_a_i = (f_i/6)*9;
-		ice_uint t_a_i = (f_i/6)*6;
-		
-		ice_uint v_i = (cube_faces[f_i]-1)*3;
-		ice_video_array_set(vertices_id,v_a_i,cube_vertices[v_i]);
-		ice_video_array_set(vertices_id,v_a_i+1,cube_vertices[v_i+1]);
-		ice_video_array_set(vertices_id,v_a_i+2,cube_vertices[v_i+2]);
-		
-		v_i = (cube_faces[f_i+1]-1)*2;
-		ice_video_array_set(uvs_id,t_a_i,cube_uvs[v_i]);
-		ice_video_array_set(uvs_id,t_a_i+1,cube_uvs[v_i+1]);
-		
-		v_i = (cube_faces[f_i+2]-1)*3;
-		ice_video_array_set(vertices_id,v_a_i+3,cube_vertices[v_i]);
-		ice_video_array_set(vertices_id,v_a_i+4,cube_vertices[v_i+1]);
-		ice_video_array_set(vertices_id,v_a_i+5,cube_vertices[v_i+2]);
-		
-		v_i = (cube_faces[f_i+3]-1)*2;
-		ice_video_array_set(uvs_id,t_a_i+2,cube_uvs[v_i]);
-		ice_video_array_set(uvs_id,t_a_i+3,cube_uvs[v_i+1]);
-		
-		v_i = (cube_faces[f_i+4]-1)*3;
-		ice_video_array_set(vertices_id,v_a_i+6,cube_vertices[v_i]);
-		ice_video_array_set(vertices_id,v_a_i+7,cube_vertices[v_i+1]);
-		ice_video_array_set(vertices_id,v_a_i+8,cube_vertices[v_i+2]);
-		
-		v_i = (cube_faces[f_i+5]-1)*2;
-		ice_video_array_set(uvs_id,t_a_i+4,cube_uvs[v_i]);
-		ice_video_array_set(uvs_id,t_a_i+5,cube_uvs[v_i+1]);
-	}
-	
-	ice_video_array_set(model_id,0,(ice_real)vertices_id);
-	ice_video_array_set(model_id,1,(ice_real)uvs_id);
+	model_id = load_model(
+		cube_vertices,
+		cube_uvs,
+		cube_faces,
+		sizeof(cube_faces)/sizeof(ice_uint)
+	);
 }
 
 void ice_deinit() {}
@@ -184,8 +200,6 @@ void ice_deinit() {}
 ice_uint ice_update(
 	ice_real tick
 ) {
-	ice_video_texture_clear(0);
-		
 	lmath_matrix_44_copy(view,render);
 	lmath_matrix_44_copy(camera,inverse_camera);
 	lmath_matrix_44_inverse(inverse_camera);
@@ -197,7 +211,6 @@ ice_uint ice_update(
 	}
 	
 	ice_video_model_draw(
-		0,
 		texture_1,
 		projection_id,
 		model_id

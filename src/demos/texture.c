@@ -1,7 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <conio.h>
-
 #include "ice.h"
 
 void ice_init() {

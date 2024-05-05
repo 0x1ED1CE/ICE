@@ -873,7 +873,7 @@ ice_uint ice_video_stream_load(
 		}
 	}
 	
-	ice_log((ice_char *)"Cannot exceed max video streams limit");
+	ice_log((ice_char *)"Exceeded texture streams limit");
 	
 	return 0;
 }
@@ -1013,7 +1013,7 @@ ice_uint ice_video_stream_state_get(
 	ice_video_stream *stream = &streams[stream_id];
 	
 	if (plm_get_loop(stream->plm)) {
-		return ICE_VIDEO_STATE_LOOP;
+		return ICE_VIDEO_STATE_LOOPING;
 	} else if(plm_get_video_enabled(stream->plm)) {
 		return ICE_VIDEO_STATE_PLAYING;
 	}
@@ -1060,7 +1060,7 @@ void ice_video_stream_state_set(
 			);
 			
 			break;
-		case ICE_VIDEO_STATE_LOOP:
+		case ICE_VIDEO_STATE_LOOPING:
 			plm_set_video_enabled(
 				stream->plm,
 				TRUE

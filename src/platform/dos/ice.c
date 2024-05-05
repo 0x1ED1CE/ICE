@@ -32,12 +32,12 @@ int main() {
 	if (
 		ice_clock_init() ||
 		ice_audio_init() ||
-		ice_video_init(640,480) ||
+		//ice_video_init(640,480) ||
 		ice_input_init()
 	) {
 		ice_clock_deinit();
 		ice_audio_deinit();
-		ice_video_deinit();
+		//ice_video_deinit();
 		ice_input_deinit();
 		
 		printf("An error occurred. See LOG.TXT for details.\n");
@@ -58,7 +58,7 @@ int main() {
 		}
 		
 		ice_audio_buffer(frame_rate);
-		ice_video_buffer(frame_rate);
+		//ice_video_buffer(frame_rate);
 		
 		frame_rate = ice_clock_get()-frame_start;
 	}
@@ -67,7 +67,7 @@ int main() {
 	
 	ice_clock_deinit();
 	ice_audio_deinit();
-	ice_video_deinit();
+	//ice_video_deinit();
 	ice_input_deinit();
 	
 	return 0;

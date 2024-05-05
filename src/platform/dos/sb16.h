@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <conio.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,10 +12,7 @@
 #include <go32.h>
 #include <dpmi.h>
 
-#ifndef PL_MPEG_IMPLEMENTATION
-#define PL_MPEG_IMPLEMENTATION
-#include "lib/plmpeg/plmpeg.h"
-#endif
+#include "lib/stb/stb_vorbis.c"
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
@@ -40,7 +38,7 @@ typedef struct {
 audio_sample *samples = NULL;
 audio_source *sources = NULL;
 
-unsigned int   dsp_port              = 0x220; //Sound Blaster port address
+unsigned int   dsp_port;                      //Sound Blaster port address
 unsigned int   dsp_dma               = 0x01;  //DMA channel
 unsigned char *dsp_dma_buffer        = NULL;
 unsigned int   dsp_dma_buffer_offset = 0;
@@ -54,7 +52,7 @@ unsigned int dsp_reset(
 	//Reset the DSP
 	outportb(port+0x6,1);
 	delay(10);
-	outportb (port+0x6,0);
+	outportb(port+0x6,0);
 	delay(10);
 
 	//Check if reset was successfull
@@ -65,11 +63,10 @@ unsigned int dsp_reset(
 		//DSP was found
 		dsp_port=port;
 		
-		return (1);
-	} else {
-		//No DSP was found
-		return (0);
+		return 1;
 	}
+	
+	return 0;
 }
 
 void dsp_write(
@@ -341,13 +338,15 @@ ice_uint ice_audio_sample_load(
 	ice_uint file_id
 ) {
 	if (samples==NULL) {
+		ice_log((ice_char *)"Audio is not initialized!");
+		
 		return 0;
 	}
 	
-	unsigned int sample_id = 0;
-	audio_sample *sample   = NULL;
+	ice_uint      sample_id = 0;
+	audio_sample *sample    = NULL;
 	
-	for (unsigned int i=0; i<MAX_SAMPLES; i++) {
+	for (ice_uint i=0; i<MAX_SAMPLES; i++) {
 		if (samples[i].data==NULL) {
 			sample_id = i;
 			sample    = &samples[i];
@@ -357,20 +356,29 @@ ice_uint ice_audio_sample_load(
 	}
 	
 	if (sample==NULL) {
+		ice_log((ice_char *)"Exceeded audio samples limit");
+		
 		return 0;
 	}
 	
-	FILE *wav_file;
 	char filename[32];
-	sprintf(filename,"%u.wav",(unsigned int)file_id);
+	sprintf(
+		filename,
+		"%u.ogg",
+		(unsigned int)file_id
+	);
 	
-	wav_file=fopen(filename, "rb");
+	stb_vorbis *stream = stb_vorbis_open_filename(
+		filename,
+		NULL,
+		NULL
+	);
 	
-	if (wav_file==NULL) {
+	if (stream==NULL) {
 		ice_char msg[64];
 		sprintf(
 			(char *)msg,
-			"Failed to open audio sample: %d",
+			"Failed to load audio sample: %u",
 			file_id
 		);
 		ice_log(msg);
@@ -378,22 +386,22 @@ ice_uint ice_audio_sample_load(
 		return 0;
 	}
 	
-	fseek(wav_file,40L,SEEK_SET);
+	stb_vorbis_info info = stb_vorbis_get_info(stream);
 	
-	sample->length = getw(wav_file);
+	sample->rate   = info.sample_rate;
+	sample->length = stb_vorbis_stream_length_in_samples(stream);
 	sample->data   = malloc(sample->length);
-	sample->rate   = 22050;
 	
 	if (sample->data==NULL) {
 		ice_char msg[64];
 		sprintf(
 			(char *)msg,
-			"Failed to allocate audio sample: %d",
+			"Failed to allocate audio sample: %u",
 			file_id
 		);
 		ice_log(msg);
 		
-		fclose(wav_file);
+		stb_vorbis_close(stream);
 		
 		sample->length = 0;
 		sample->rate   = 0;
@@ -401,12 +409,39 @@ ice_uint ice_audio_sample_load(
 		return 0;
 	}
 	
-	fseek(wav_file,44L,SEEK_SET); 
-	fread(sample->data,1,sample->length,wav_file);
-
-	fclose(wav_file);
+	short buffer[256];
+	int   decoded;
+	int   data_index = 0;
 	
-	return (ice_uint)sample_id;
+	do {
+		decoded=stb_vorbis_get_samples_short_interleaved(
+			stream,
+			info.channels,
+			buffer,
+			256
+		);
+		
+		for (
+			int i=0;
+			i<decoded*info.channels;
+			i+=info.channels
+		) {
+			int pulse=32767;
+			
+			//Convert stereo down to mono
+			for (int j=0; j<info.channels; j++) {
+				pulse = (pulse+buffer[i+j]+32767)/2;
+			}
+			
+			sample->data[data_index]=(unsigned char)(pulse/256);
+			
+			data_index++;
+		}
+	} while (decoded>0);
+	
+	stb_vorbis_close(stream);
+	
+	return sample_id;
 }
 
 void ice_audio_sample_delete(
@@ -586,7 +621,7 @@ void ice_audio_source_position_set(
 	);
 }
 
-ice_char ice_audio_source_state_get(
+ice_uint ice_audio_source_state_get(
 	ice_uint source_id
 ) {
 	if (
@@ -602,7 +637,7 @@ ice_char ice_audio_source_state_get(
 
 void ice_audio_source_state_set(
 	ice_uint source_id,
-	ice_char state
+	ice_uint state
 ) {
 	if (
 		sources==NULL || 
@@ -621,8 +656,8 @@ void ice_audio_source_state_set(
 		case ICE_AUDIO_STATE_PLAYING:
 			source->state=ICE_AUDIO_STATE_PLAYING;
 			break;
-		case ICE_AUDIO_STATE_LOOP:
-			source->state=ICE_AUDIO_STATE_LOOP;
+		case ICE_AUDIO_STATE_LOOPING:
+			source->state=ICE_AUDIO_STATE_LOOPING;
 	}
 }
 

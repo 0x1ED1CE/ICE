@@ -4,7 +4,7 @@
 #define ICE_AUDIO_STATE_NONE    0
 #define ICE_AUDIO_STATE_PAUSED  1
 #define ICE_AUDIO_STATE_PLAYING 2
-#define ICE_AUDIO_STATE_LOOP    3
+#define ICE_AUDIO_STATE_LOOPING 3
 
 ice_uint ice_audio_init();
 
@@ -52,13 +52,13 @@ void ice_audio_source_position_set(
 	ice_real position
 );
 
-ice_char ice_audio_source_state_get(
+ice_uint ice_audio_source_state_get(
 	ice_uint source_id
 );
 
 void ice_audio_source_state_set(
 	ice_uint source_id,
-	ice_char state
+	ice_uint state
 );
 
 ice_real ice_audio_source_volume_get(
@@ -92,13 +92,13 @@ void ice_audio_stream_position_set(
 	ice_real position
 );
 
-ice_char ice_audio_stream_state_get(
+ice_uint ice_audio_stream_state_get(
 	ice_uint stream_id
 );
 
 void ice_audio_stream_state_set(
 	ice_uint stream_id,
-	ice_char state
+	ice_uint state
 );
 
 ice_real ice_audio_stream_volume_get(

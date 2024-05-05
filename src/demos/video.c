@@ -1,13 +1,20 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <conio.h>
-
 #include "ice.h"
 
 static ice_uint texture_stream_id;
+static ice_uint audio_stream_id;
 
 void ice_init() {
 	texture_stream_id = ice_video_stream_load(0);
+	audio_stream_id   = ice_audio_stream_load(0);
+	
+	ice_video_stream_state_set(
+		texture_stream_id,
+		ICE_VIDEO_STATE_PLAYING
+	);
+	ice_audio_stream_state_set(
+		audio_stream_id,
+		ICE_AUDIO_STATE_PLAYING
+	);
 }
 
 void ice_deinit() {}

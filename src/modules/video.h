@@ -12,7 +12,7 @@
 
 #define ICE_VIDEO_STATE_PAUSED  0
 #define ICE_VIDEO_STATE_PLAYING 1
-#define ICE_VIDEO_STATE_LOOP    2
+#define ICE_VIDEO_STATE_LOOPING 2
 
 ice_uint ice_video_init(
 	ice_uint width,
