@@ -1,80 +1,76 @@
-PLATFORM ?= DOS
-BIN      ?= ../bin/ice.exe
-MAIN     ?= demos/triangle.c
+# [HOW TO BUILD]
+# First you need DJGPP and MinGW installed:
+# https://github.com/andrewwutw/build-djgpp/releases
+#
+# Once installed, run `make` in this directory
+# Make will generate libice.a
 
-ifeq ($(PLATFORM),DOS)
-    CC   = i586-pc-msdosdjgpp-gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
-    LIBS = -lm -Llib/mesa/lib -ligl -lgl
-else ifeq ($(PLATFORM),SDL)
-    CC   = gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
-    LIBS = -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -mwindows
+
+# [HOW TO LINK AND COMPILE A DOS PROGRAM]
+# There are 4 static libraries needed to link against:
+# libice.a - The static library you just made
+# libm.a   - Standard math library
+# libigl.a - GLIDE import library
+# libgl.a  - Mesa OpenGL library
+#
+# libigl.a and libgl.a are generated from the Mesa graphics library
+# Prebuilt binaries should already exist under lib/mesa/lib
+#
+# Use the following command template to link and compile:
+# i586-pc-msdosdjgpp-gcc <source.c> -lice -lm -ligl -lgl -o <output.exe>
+#
+# Example:
+# cd src
+# i586-pc-msdosdjgpp-gcc -I. demos/triangle.c -L. -lice -lm -Llib/mesa/lib -ligl -lgl -o test.exe
+
+
+# [HOW TO BUILD MESA] (OPTIONAL)
+# Mesa is already prebuilt but if you wish to make any modifications:
+# dxe3gen.exe is needed in order to create libigl.a (included in DJGPP)
+# libigl.a is only needed if you wish to use 3dfx Voodoo cards. If you are 
+# using software rendering then only libgl.a is required.
+#
+# Run the following commands to build Mesa:
+# cd lib/mesa
+# make -f Makefile.DJ FX=1
+#
+# If you want to enable software rendering, set FX=0
+#
+# You should now have libgl.a and libigl.a under lib/mesa/lib
+
+
+# [HOW TO RUN]
+# The following files must be in the same directory as the DOS program:
+# CWSDPMI.EXE
+# GL.DXE
+# GLIDE3X.DXE
+#
+# CWSDPMI.EXE should already be included but it can also be obtained from:
+# https://sandmann.dotster.com/cwsdpmi/
+#
+# Only GL.DXE is required if you are using software rendering
+# GLIDE3X.DXE is required if you are using hardware rendering
+#
+# GL.DXE can be found under lib/mesa/lib
+#
+# GLIDE3X.DXE can be obtained from:
+# https://github.com/basecq/q2dos/tree/master/dos/3rdparty/lib_dxe/voodoo
+# Make sure to choose the correct DXE driver for the Voodoo card you're using
+
+
+PLATFORM ?= dos
+
+ifeq ($(PLATFORM),dos)
+    CC = i586-pc-msdosdjgpp-gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
+else ifeq ($(PLATFORM),sdl)
+    CC = gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
 endif
 
-all: \
-	ice.o \
-	iso_vm.o
+all: libice.a
 
-	$(CC) \
-	-I../src \
-	-I../src/demos \
-	$(MAIN) \
-	ice.o \
-	iso_vm.o \
-	$(LIBS) \
-	-o $(BIN)
-
-ice.o: \
-	ice.h \
-	modules/clock.h \
-	modules/video.h \
-	modules/audio.h \
-	modules/input.h \
-	modules/cache.h \
-	lib/stb/stb_image.h
-	
-	$(CC) \
-	-I../src \
-	-Iplatform/$(PLATFORM) \
-	-c platform/$(PLATFORM)/ice.c \
-	-o ice.o
-
-etch.o: \
-	lib/etch/etch.h \
-	lib/etch/etch.c
-	
-	$(CC) \
-	-Ilib/etch \
-	-c lib/etch/etch.c \
-	-o etch.o
-
-iso_vm.o: \
-	lib/iso/iso.h \
-	lib/iso/iso_vm.h \
-	lib/iso/iso_vm.c
-	
-	$(CC) \
-	-Ilib/iso \
-	-c lib/iso/iso_vm.c
-
-glad.o: \
-	lib/glad/glad.h \
-	lib/glad/glad.c \
-	lib/glad/khrplatform.h
-
-	$(CC) \
-	-Ilib/glad \
-	-c lib/glad/glad.c
-
-mesa:
-	$(MAKE) \
-	-f Makefile.DJ \
-	-C lib/mesa \
-	CC=i586-pc-msdosdjgpp-gcc \
-	FX=1
+libice.a:
+	$(CC) -I. -c platform/$(PLATFORM)/*.c
+	ar -rcs libice.a *.o
 
 clean:
-	$(RM) \
-	etch.o \
-	iso_vm.o \
-	glad.o \
-	ice.o
+	$(RM) *.o
