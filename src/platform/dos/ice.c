@@ -3,12 +3,6 @@
 
 #include "ice.h"
 
-#include "clock.h"
-#include "video.h"
-#include "audio.h"
-#include "input.h"
-#include "cache.h"
-
 void ice_log(
 	ice_char *message
 ) {
