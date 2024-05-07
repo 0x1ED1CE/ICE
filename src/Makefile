@@ -59,13 +59,8 @@
 # Make sure to choose the correct DXE driver for the Voodoo card you're using
 
 
-PLATFORM ?= dos
-
-ifeq ($(PLATFORM),dos)
-    CC = i586-pc-msdosdjgpp-gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
-else ifeq ($(PLATFORM),sdl)
-    CC = gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
-endif
+PLATFORM = dos
+CC       = i586-pc-msdosdjgpp-gcc -std=gnu99 -Wall -Wextra -Wno-attributes -s -O2
 
 all: libice.a
 
@@ -74,4 +69,4 @@ libice.a:
 	ar -rcs libice.a *.o
 
 clean:
-	$(RM) *.o
+	$(RM) *.a *.o
