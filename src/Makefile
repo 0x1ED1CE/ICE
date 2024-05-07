@@ -1,5 +1,5 @@
 # [HOW TO BUILD]
-# First you need DJGPP and MinGW installed:
+# First you need DJGPP installed as well as MinGW if you're on Windows:
 # https://github.com/andrewwutw/build-djgpp/releases
 #
 # Once installed, run `make` in this directory
@@ -8,7 +8,7 @@
 
 # [HOW TO LINK AND COMPILE A DOS PROGRAM]
 # There are 4 static libraries needed to link against:
-# libice.a - The static library you just made
+# libice.a - The library you just made
 # libm.a   - Standard math library
 # libigl.a - GLIDE import library
 # libgl.a  - Mesa OpenGL library
@@ -20,15 +20,16 @@
 # i586-pc-msdosdjgpp-gcc <source.c> -lice -lm -ligl -lgl -o <output.exe>
 #
 # Example:
-# cd src
 # i586-pc-msdosdjgpp-gcc -I. demos/triangle.c -L. -lice -lm -Llib/mesa/lib -ligl -lgl -o test.exe
 
 
 # [HOW TO BUILD MESA] (OPTIONAL)
-# Mesa is already prebuilt but if you wish to make any modifications:
+# This is only a brief guide on how to recompile Mesa 6.2.
+# For more detailed instructions, refer to: https://github.com/sezero/MesaFX-6.2
+#
 # dxe3gen.exe is needed in order to create libigl.a (included in DJGPP)
 # libigl.a is only needed if you wish to use 3dfx Voodoo cards. If you are 
-# using software rendering then only libgl.a is required.
+# using software rendering then only libgl.a will be created.
 #
 # Run the following commands to build Mesa:
 # cd lib/mesa
@@ -36,7 +37,7 @@
 #
 # If you want to enable software rendering, set FX=0
 #
-# You should now have libgl.a and libigl.a under lib/mesa/lib
+# You should now have libgl.a, libigl.a and GL.DXE under lib/mesa/lib
 
 
 # [HOW TO RUN]
