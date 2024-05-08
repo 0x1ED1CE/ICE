@@ -19,6 +19,23 @@
 #
 # Example:
 # i586-pc-msdosdjgpp-gcc -I. demos/triangle.c -L. -lice -lm -Llib/mesa/lib -ligl -lgl -o test.exe
+#
+# To run, the following files must be in the same directory as the DOS program:
+# CWSDPMI.EXE
+# GL.DXE
+# GLIDE3X.DXE
+#
+# CWSDPMI.EXE should already be included but it can also be obtained from:
+# https://sandmann.dotster.com/cwsdpmi/
+#
+# Only GL.DXE is required if you are using software rendering
+# GLIDE3X.DXE is required if you are using hardware rendering
+#
+# GL.DXE can be found under lib/mesa/lib
+#
+# GLIDE3X.DXE can be obtained from:
+# https://github.com/basecq/q2dos/tree/master/dos/3rdparty/lib_dxe/voodoo
+# Make sure to choose the correct DXE driver for the Voodoo card you're using
 
 
 # [HOW TO BUILD FOR SDL2]
@@ -40,25 +57,6 @@
 #
 # Windows example:
 # gcc -I. demos/triangle.c -L. -lice -lm -lmingw32 -lSDL2main -lSDL2 -lopengl32 -o test.exe
-
-
-# [HOW TO RUN ON DOS]
-# The following files must be in the same directory as the DOS program:
-# CWSDPMI.EXE
-# GL.DXE
-# GLIDE3X.DXE
-#
-# CWSDPMI.EXE should already be included but it can also be obtained from:
-# https://sandmann.dotster.com/cwsdpmi/
-#
-# Only GL.DXE is required if you are using software rendering
-# GLIDE3X.DXE is required if you are using hardware rendering
-#
-# GL.DXE can be found under lib/mesa/lib
-#
-# GLIDE3X.DXE can be obtained from:
-# https://github.com/basecq/q2dos/tree/master/dos/3rdparty/lib_dxe/voodoo
-# Make sure to choose the correct DXE driver for the Voodoo card you're using
 
 
 CC       = i586-pc-msdosdjgpp-gcc
