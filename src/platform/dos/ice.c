@@ -1,11 +1,28 @@
 #include <stdio.h>
 #include <stdlib.h>
+//#include <bios.h>
 
 #include "ice.h"
+
+#define DEBUG_PORT 1
 
 void ice_log(
 	ice_char *message
 ) {
+	/*
+	for (
+		ice_uint i=0;
+		message[i];
+		i++
+	) {
+		_bios_serialcom(
+			_COM_SEND,
+			DEBUG_PORT,
+			(unsigned)message[i]
+		);
+	}
+	*/
+	
 	FILE *log = fopen("log.txt","a");
 	
 	if (log==NULL) {
@@ -23,10 +40,21 @@ void ice_log(
 }
 
 int main() {
+	/*
+	_bios_serialcom(
+		_COM_INIT,
+		DEBUG_PORT,
+		_COM_9600|
+		_COM_NOPARITY|
+		_COM_STOP1|
+		_COM_CHR8
+	);
+	*/
+	
 	if (
 		ice_clock_init() ||
 		ice_audio_init() ||
-		ice_video_init(640,480) ||
+		ice_video_init(320,200) ||
 		ice_input_init()
 	) {
 		ice_clock_deinit();
@@ -42,19 +70,19 @@ int main() {
 	ice_init();
 	
 	ice_real frame_start;
-	ice_real frame_rate = 0;
+	ice_real frame_time = 0;
 	
 	while (1) {
 		frame_start = ice_clock_get();
 		
-		if (ice_update(frame_rate)) {
+		if (ice_update(frame_time)) {
 			break;
 		}
 		
-		ice_audio_buffer(frame_rate);
-		ice_video_buffer(frame_rate);
+		ice_audio_buffer(frame_time);
+		ice_video_buffer(frame_time);
 		
-		frame_rate = ice_clock_get()-frame_start;
+		frame_time = ice_clock_get()-frame_start;
 	}
 	
 	ice_deinit();

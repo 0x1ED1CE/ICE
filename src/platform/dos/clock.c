@@ -5,7 +5,7 @@
 uclock_t clock_init;
 
 ice_uint ice_clock_init() {
-	clock_init=uclock();
+	clock_init=clock();
 	
 	return 0;
 }
@@ -15,5 +15,5 @@ void ice_clock_deinit() {
 }
 
 ice_real ice_clock_get() {
-	return (ice_real)(uclock()-clock_init)/UCLOCKS_PER_SEC;
+	return (ice_real)(uclock()-clock_init)/CLOCKS_PER_SEC;
 }

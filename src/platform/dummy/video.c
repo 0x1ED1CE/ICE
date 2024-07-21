@@ -15,6 +15,11 @@ void ice_video_buffer(
 ) {
 }
 
+void ice_video_clear(
+	ice_uint attribute
+) {
+}
+
 void ice_video_texture_flush() {
 }
 
@@ -200,13 +205,4 @@ void ice_video_stream_state_set(
 	ice_uint stream_id,
 	ice_uint state
 ) {
-}
-
-void ice_video_depth_set(
-	ice_uint state
-) {
-}
-
-ice_uint ice_video_depth_get() {
-	return 0;
 }

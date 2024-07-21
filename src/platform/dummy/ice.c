@@ -25,8 +25,6 @@ int main() {
 		ice_video_deinit();
 		ice_input_deinit();
 
-		printf("An error occurred. See LOG.TXT for details.\n");
-
 		return -1;
 	}
 

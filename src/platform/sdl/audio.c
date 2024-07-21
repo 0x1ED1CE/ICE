@@ -12,6 +12,7 @@
 
 #define MAX_SAMPLES 32
 #define MAX_SOURCES 64
+#define MAX_STREAMS 8
 
 typedef struct {
 	unsigned char *data;
@@ -26,8 +27,19 @@ typedef struct {
 	unsigned char volume;
 } audio_source;
 
-audio_sample *samples = NULL;
-audio_source *sources = NULL;
+typedef struct {
+	stb_vorbis   *ogg_stream;
+	unsigned int  channels;
+	unsigned int  rate;
+	unsigned int  length;
+	unsigned int  position;
+	unsigned char state;
+	unsigned char volume;
+} audio_stream;
+
+static audio_sample *samples = NULL;
+static audio_source *sources = NULL;
+static audio_stream *streams = NULL;
 
 static SDL_AudioSpec audio_spec;
 
@@ -43,10 +55,10 @@ void sdl_audio_buffer(
 	audio_sample *sample;
 	audio_source *source;
 
-	for (unsigned int i=0; i<len; i++) {
+	for (int i=0; i<len; i++) {
 		stream[i]=127;
 
-		for (unsigned int j=0; j<MAX_SOURCES; j++) {
+		for (int j=0; j<MAX_SOURCES; j++) {
 			source = &sources[j];
 			sample = &samples[source->sample_id];
 
@@ -75,40 +87,60 @@ void sdl_audio_buffer(
 }
 
 ice_uint ice_audio_init() {
-	audio_spec.freq     = 22050;
-	audio_spec.format   = AUDIO_U8;
-	audio_spec.channels = 1;
-	audio_spec.samples  = BUFFER_SIZE;
-	audio_spec.callback = sdl_audio_buffer;
-	audio_spec.userdata = NULL;
+	{ //Initialize SDL audio
+		audio_spec.freq     = 22050;
+		audio_spec.format   = AUDIO_U8;
+		audio_spec.channels = 1;
+		audio_spec.samples  = BUFFER_SIZE;
+		audio_spec.callback = sdl_audio_buffer;
+		audio_spec.userdata = NULL;
 
-	if (SDL_OpenAudio(
-		&audio_spec,
-		NULL
-	)!=0) {
-		char error_msg[256];
+		if (SDL_OpenAudio(
+			&audio_spec,
+			NULL
+		)!=0) {
+			char error_msg[256];
 
-		sprintf(
-			error_msg,
-			"Failed to initialize audio: %s",
-			SDL_GetError()
-		);
+			sprintf(
+				error_msg,
+				"Failed to initialize audio: %s",
+				SDL_GetError()
+			);
 
-		ice_log((ice_char *)error_msg);
+			ice_log((ice_char *)error_msg);
 
-		return 1;
+			return 1;
+		}
+		
+		SDL_PauseAudio(0);
 	}
 
-	samples=(audio_sample *)calloc(
-		MAX_SAMPLES,
-		sizeof(audio_sample)
-	);
-	sources=(audio_source *)calloc(
-		MAX_SOURCES,
-		sizeof(audio_source)
-	);
-
-	SDL_PauseAudio(0);
+	{ //Allocate slots
+		samples = calloc(
+			MAX_SAMPLES,
+			sizeof(audio_sample)
+		);
+		
+		sources = calloc(
+			MAX_SOURCES,
+			sizeof(audio_source)
+		);
+		
+		streams = calloc(
+			MAX_STREAMS,
+			sizeof(audio_stream)
+		);
+		
+		if (
+			samples == NULL ||
+			sources == NULL ||
+			streams == NULL
+		) {
+			ice_log((ice_char *)"Failed to allocate audio slots!");
+			
+			return 1;
+		}
+	}
 
     return 0;
 }
@@ -118,15 +150,21 @@ void ice_audio_deinit() {
 
 	ice_audio_sample_flush();
 	ice_audio_source_flush();
-
+	ice_audio_stream_flush();
+	
 	if (samples!=NULL) {
 		free(samples);
 		samples=NULL;
 	}
-
+	
 	if (sources!=NULL) {
 		free(sources);
 		sources=NULL;
+	}
+	
+	if (streams!=NULL) {
+		free(streams);
+		streams=NULL;
 	}
 }
 
@@ -461,11 +499,9 @@ void ice_audio_source_state_set(
 	switch(state) {
 		case ICE_AUDIO_STATE_PLAYING:
 			source->state=ICE_AUDIO_STATE_PLAYING;
-			
 			break;
 		case ICE_AUDIO_STATE_LOOPING:
 			source->state=ICE_AUDIO_STATE_LOOPING;
-			
 			break;
 		default:
 			source->state=ICE_AUDIO_STATE_PAUSED;
@@ -504,55 +540,226 @@ void ice_audio_source_volume_set(
 	sources[source_id].volume=(ice_char)(volume*255);
 }
 
+void ice_audio_stream_flush() {
+	if (streams!=NULL) {
+		for (ice_uint i=0; i<MAX_STREAMS; i++) {
+			ice_audio_stream_delete(i);
+		}
+	}
+}
+
 ice_uint ice_audio_stream_load(
 	ice_uint file_id
 ) {
-	return 0;
+	if (streams==NULL) {
+		ice_log((ice_char *)"Audio is not initialized!");
+		
+		return 0;
+	}
+	
+	ice_uint      stream_id = 0;
+	audio_stream *stream    = NULL;
+	
+	for (ice_uint i=0; i<MAX_STREAMS; i++) {
+		if (streams[i].ogg_stream==NULL) {
+			stream_id = i;
+			stream    = &streams[i];
+			
+			break;
+		}
+	}
+	
+	if (stream==NULL) {
+		ice_log((ice_char *)"Exceeded audio streams limit");
+		
+		return 0;
+	}
+	
+	char filename[32];
+	sprintf(
+		filename,
+		"%u.ogg",
+		(unsigned int)file_id
+	);
+	
+	stb_vorbis *ogg_stream = stb_vorbis_open_filename(
+		filename,
+		NULL,
+		NULL
+	);
+	
+	if (ogg_stream==NULL) {
+		ice_char msg[64];
+		sprintf(
+			(char *)msg,
+			"Failed to load audio stream: %u",
+			file_id
+		);
+		ice_log(msg);
+		
+		return 0;
+	}
+	
+	stb_vorbis_info info = stb_vorbis_get_info(ogg_stream);
+	
+	stream->ogg_stream = ogg_stream;
+	stream->channels    = info.channels;
+	stream->rate       = info.sample_rate;
+	stream->length     = stb_vorbis_stream_length_in_samples(ogg_stream);
+	stream->position   = 0;
+	stream->volume     = 0;
+	stream->state      = ICE_AUDIO_STATE_PAUSED;
+	
+	return stream_id;
 }
 
 void ice_audio_stream_delete(
 	ice_uint stream_id
 ) {
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	stb_vorbis_close(stream->ogg_stream);
+	
+	stream->ogg_stream = NULL;
+	stream->channels   = 0;
+	stream->rate       = 0;
+	stream->length     = 0;
+	stream->position   = 0;
+	stream->volume     = 0;
+	stream->state      = ICE_AUDIO_STATE_NONE;
 }
 
 ice_real ice_audio_stream_length_get(
 	ice_uint stream_id
 ) {
-	return 0;
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return 0;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	return (ice_real)stream->length/stream->rate;
 }
 
 ice_real ice_audio_stream_position_get(
 	ice_uint stream_id
 ) {
-	return 0;
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return 0;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	return 0; //TODO
 }
 
 void ice_audio_stream_position_set(
 	ice_uint stream_id,
 	ice_real position
 ) {
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	//TODO
 }
 
 ice_uint ice_audio_stream_state_get(
 	ice_uint stream_id
 ) {
-	return 0;
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return ICE_AUDIO_STATE_NONE;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	return stream->state;
 }
 
 void ice_audio_stream_state_set(
 	ice_uint stream_id,
 	ice_uint state
 ) {
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	switch(state) {
+		case ICE_AUDIO_STATE_PLAYING:
+			stream->state=ICE_AUDIO_STATE_PLAYING;
+			break;
+		case ICE_AUDIO_STATE_LOOPING:
+			stream->state=ICE_AUDIO_STATE_LOOPING;
+			break;
+		default:
+			stream->state=ICE_AUDIO_STATE_PAUSED;
+	}
 }
 
 ice_real ice_audio_stream_volume_get(
 	ice_uint stream_id
 ) {
-	return 0;
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return 0;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	return (ice_real)stream->volume/255;
 }
 
 void ice_audio_stream_volume_set(
 	ice_uint stream_id,
 	ice_real volume
 ) {
+	if (
+		streams==NULL || 
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return;
+	}
+	
+	audio_stream *stream = &streams[stream_id];
+	
+	volume = MAX(volume,0);
+	volume = MIN(volume,1);
+	
+	stream->volume=(ice_char)(volume*255);
 }

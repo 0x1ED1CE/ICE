@@ -1,29 +1,28 @@
-#include <stdint.h>
-#include <conio.h>
+#include "ice.h"
+
 #include <stdio.h>
-#include <string.h>
-#include <dos.h>
 #include <malloc.h>
 #include <math.h>
-#include <mem.h>
-#include <sys\movedata.h>
-#include <sys\nearptr.h>
-#include <pc.h>
+#include <dos.h>
 #include <go32.h>
 #include <dpmi.h>
-
-#include "ice.h"
 
 #include "lib/stb/stb_vorbis.c"
 
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
 
+#define LOCK_VARIABLE(x) _go32_dpmi_lock_data((void *)&x,(long)sizeof(x));
+#define LOCK_FUNCTION(x) _go32_dpmi_lock_code(x,(long)sizeof(x));
+
 #define BUFFER_SIZE 2048
 
 #define MAX_SAMPLES 32
 #define MAX_SOURCES 64
 #define MAX_STREAMS 8
+
+#define TIMER_IRQ 0x08
+#define TIMER_DIV 27   //1193181Hz / 44100Hz
 
 typedef struct {
 	unsigned char *data;
@@ -48,17 +47,19 @@ typedef struct {
 	unsigned char volume;
 } audio_stream;
 
-audio_sample *samples = NULL;
-audio_source *sources = NULL;
-audio_stream *audio_streams = NULL;
+static audio_sample *samples = NULL;
+static audio_source *sources = NULL;
+static audio_stream *streams = NULL;
 
-unsigned int   dsp_port;                      //Sound Blaster port address
-unsigned int   dsp_dma               = 0x01;  //DMA channel
-unsigned char *dsp_dma_buffer        = NULL;
-unsigned int   dsp_dma_buffer_offset = 0;
+volatile unsigned char *speaker_buffer;
+volatile unsigned int   speaker_read;
+         unsigned int   speaker_write;
 
-_go32_dpmi_seginfo dos_dma_buffer;
-unsigned int       dos_dma_buffer_offset;
+_go32_dpmi_seginfo old_isr;
+_go32_dpmi_seginfo new_isr;
+
+unsigned int dsp_port; //Creative Sound Blaster
+unsigned int lpt_port; //Covox Speech Thing
 
 unsigned int dsp_reset(
 	unsigned int port
@@ -73,282 +74,215 @@ unsigned int dsp_reset(
 	if (
 		((inportb(port+0xE)&0x80)==0x80) && 
 		(inportb(port+0xA)==0xAA)
-	) {
-		//DSP was found
-		dsp_port=port;
-		
+	) { //DSP was found
 		return 1;
 	}
-	
+
 	return 0;
 }
 
-void dsp_write(
-	unsigned char value
-) {
-  //Wait for the DSP to be ready to accept data
-  while ((inportb(dsp_port+0xC)&0x80)==0x80);
-  
-  //Send byte
-  outportb(dsp_port+0xC,value);
+void speaker_isr() {
+	if (dsp_port) {
+		outportb(
+			dsp_port+0xC,
+			0x10
+		);
+		outportb(
+			dsp_port+0xC,
+			speaker_buffer[speaker_read]
+		);
+	} else {
+		outportb(
+			lpt_port,
+			speaker_buffer[speaker_read]
+		);
+	}
+
+	speaker_read += 1;
+	speaker_read %= BUFFER_SIZE;
 }
 
 void ice_audio_buffer(ice_real tick) {
-	if (samples==NULL || sources==NULL) {
-		return;
-	}
-	
-	unsigned int pre_offset;
-	unsigned int dma_offset;
-	unsigned int dma_address;
-	
 	unsigned int mix_a;
 	unsigned int mix_b;
-	unsigned int mix_c;
-	
+
 	audio_sample *sample;
 	audio_source *source;
 	audio_stream *stream;
-	
-	dma_address = inportb(1+(dsp_dma<<1));
-	dma_address = dma_address+(inportb(1+(dsp_dma<<1))<<8);
-	dma_address = (BUFFER_SIZE-1)-dma_address;
-	pre_offset  = dma_offset=dma_address;
-	
-	while (dsp_dma_buffer_offset!=dma_offset) {
-		dsp_dma_buffer[dsp_dma_buffer_offset]=127;
-		
+
+	while (speaker_write!=speaker_read) {
+		mix_a = 127;
+
 		for (unsigned int i=0; i<MAX_SOURCES; i++) {
 			source = &sources[i];
 			sample = &samples[source->sample_id];
-			
+
 			if (
 				sample->data!=NULL &&
-				source->state>ICE_AUDIO_STATE_PAUSED 
+				source->state>ICE_AUDIO_STATE_PAUSED
 			) {
-				mix_a = (unsigned int)dsp_dma_buffer[dsp_dma_buffer_offset];
-				mix_b = (unsigned int)sample->data[source->position];///source->volume;
-				mix_c = (mix_a+mix_b)/2;
-				
-				dsp_dma_buffer[dsp_dma_buffer_offset]=(unsigned char)mix_c;
-				
+				mix_b = (unsigned int)sample->data[source->position];
+				mix_a = (mix_a+mix_b)/2;
+
 				source->position += 1;
 				source->position %= sample->length;
-				
+
 				if (
 					source->position==0 &&
 					source->state==ICE_AUDIO_STATE_PLAYING
 				) {
 					source->state=ICE_AUDIO_STATE_PAUSED;
 				}
-			} 
+			}
 		}
-		
-		dsp_dma_buffer_offset += 1;
-		dsp_dma_buffer_offset &= (BUFFER_SIZE-1);
+
+		speaker_buffer[speaker_write] = (unsigned char)mix_a;
+
+		speaker_write += 1;
+		speaker_write %= BUFFER_SIZE;
 	};
-	
-	//Copy as one or in parts
-	if (dsp_dma_buffer_offset>pre_offset) {
-		dosmemput(
-			dsp_dma_buffer+pre_offset,
-			dsp_dma_buffer_offset-pre_offset,
-			dos_dma_buffer_offset+pre_offset
-		);
-	} else {
-		dosmemput(
-			dsp_dma_buffer+pre_offset,
-			BUFFER_SIZE-pre_offset,
-			dos_dma_buffer_offset+pre_offset
-		);
-		dosmemput(
-			dsp_dma_buffer,
-			dsp_dma_buffer_offset,
-			dos_dma_buffer_offset
-		);
-	}
 }
 
 ice_uint ice_audio_init() {
-	if (dsp_dma_buffer!=NULL) {
-		ice_log((ice_char*)"DMA buffer is already initialized!");
-		
-		return 0;
+	//Initialize audio buffer
+	speaker_buffer = calloc(1,BUFFER_SIZE);
+	speaker_read   = 0;
+	speaker_write  = 0;
+
+	if (speaker_buffer==NULL) {
+		ice_log((ice_char*)"Failed to allocate audio buffer!");
+
+		return 1;
 	}
 	
-	{ //Check for Sound Blaster ports: 220, 230, 240, 250, 260 or 280
-		unsigned int port_offset;
-		
-		for (
-			port_offset=1; 
-			port_offset<9; 
-			port_offset++
+	//Detect Sound Blaster
+	unsigned int port_offset;
+	unsigned int port;
+
+	for (
+		port_offset=1; 
+		port_offset<9; 
+		port_offset++
+	) {
+		port = 0x200+(port_offset<<4);
+
+		if (
+			port_offset!=7 && 
+			dsp_reset(port)
 		) {
-			if (
-				port_offset!=7 && 
-				dsp_reset(0x200+(port_offset<<4))
-			) {
-				ice_char msg[64];
-				sprintf(
-					(char *)msg,
-					"Detected Sound Blaster: %X",
-					0x200+(port_offset<<4)
-				);
-				ice_log(msg);
-				
-				break;
-			}
-		}
-		
-		//Sound Blaster not detected
-		if (port_offset==9) {
-			ice_log((ice_char*)"Failed to detect Sound Blaster!");
-			
-			return 1;
+			dsp_port = port;
+
+			ice_char msg[64];
+			sprintf(
+				(char *)msg,
+				"Detected Sound Blaster: %X",
+				port
+			);
+			ice_log(msg);
+
+			break;
 		}
 	}
-	
-	{ //Allocate sound buffer
-		_go32_dpmi_seginfo temp_buffer; //Temporary pointer
-		
-		//Assign 32K to DMA Buffer
-		dsp_dma_buffer=calloc(
-			BUFFER_SIZE,
-			sizeof(unsigned char)
-		);
-		
-		//Assign 32K (2048 paragraphs) of DOS memory
-		temp_buffer.size=BUFFER_SIZE/16;
-		_go32_dpmi_allocate_dos_memory(&temp_buffer);
 
-		//Calculate linear address
-		dos_dma_buffer_offset=temp_buffer.rm_segment<<4;
+	//Switch to Covox if no DSP was found
+	if (port_offset==9) {
+		ice_log((ice_char*)"Sound Blaster not installed");
+		ice_log((ice_char*)"Defaulting to LPT1");
 
-		//Calculate page at start of buffer
-		unsigned int page_1=dos_dma_buffer_offset>>16;
-
-		//Calculate page at end of buffer}
-		unsigned int page_2=(
-			dos_dma_buffer_offset+
-			(BUFFER_SIZE-1)
-		)>>16;
-
-		//Check to see if a page boundary is crossed
-		if (page_1!=page_2) {
-			ice_log((ice_char*)"Buffer overlaps page boundary! Reassigning...");
-			//If so, assign another part of memory to the buffer
-			dos_dma_buffer.size=BUFFER_SIZE/16;
-			_go32_dpmi_allocate_dos_memory(&dos_dma_buffer);
-			
-			dos_dma_buffer_offset=dos_dma_buffer.rm_segment<<4;
-			_go32_dpmi_free_dos_memory(&temp_buffer);
-		} else {
-			//otherwise, use the part we've already allocated
-			dos_dma_buffer=temp_buffer;
-		}
-		
-		//Clear DMA buffers
-		memset(
-			dsp_dma_buffer,
-			127,
-			BUFFER_SIZE
-		);
-		dosmemput(
-			dsp_dma_buffer,
-			BUFFER_SIZE,
-			dos_dma_buffer_offset
-		);
+		dsp_port = 0;
+		lpt_port = 0x378;
 	}
-	
-	{ //Enable playback
-		ice_log((ice_char*)"Initializing DSP...");
-		
-		outportb(0x0A,0x04+dsp_dma); //Disable DMA channel
-		outportb(0x0C,1);            //Clear byte pointer
-		outportb(0x0B,0x58+dsp_dma); //Set mode 0x48 = single | 0x58 = auto mode + channel
-		
-		dsp_write(0xD1); //DSP-command D1h - Enable speaker
-		dsp_write(0x40); //DSP-command 40h - Set sample frequency
-		dsp_write(210);  //Write time constant
-		// 210 = 22 KHz | 225 = 32KHz | 233 = 44 KHz
-		
-		//Convert pointer to linear address
-		unsigned int page   = dos_dma_buffer_offset>>16;    //Calculate page
-		unsigned int offset = dos_dma_buffer_offset&0xFFFF; //Calculate offset in the page
 
-		//Write the offset to the DMA controller
-		outportb(dsp_dma<<1,offset&0xFF);
-		outportb(dsp_dma<<1,offset>>8);
+	//Install interrupt service
+	LOCK_FUNCTION(speaker_isr);
+	LOCK_VARIABLE(speaker_buffer);
+	LOCK_VARIABLE(speaker_read);
 
-		if (dsp_dma==0) outportb(0x87,page);
-		if (dsp_dma==1) outportb(0x83,page);
-		if (dsp_dma==3) outportb(0x82,page);
-		
-		//Set the block length
-		outportb((dsp_dma<<1)+1,(BUFFER_SIZE-1)&0xFF);
-		outportb((dsp_dma<<1)+1,((BUFFER_SIZE-1)>>8)&0xFF);
-		
-		//DSP-command 48h - Set block length to 0x1FFF = 8 Kbyte
-		dsp_write(0x48);
-		dsp_write(0xFF);
-		dsp_write(0x1F);
-		
-		//DSP-command 1Ch - Start auto-init playback
-		dsp_write(0x1C);
-		
-		//Enable DMA channel
-		outportb(0x0A,dsp_dma);
+	_go32_dpmi_get_protected_mode_interrupt_vector(
+		TIMER_IRQ,
+		&old_isr
+	);
+
+	new_isr.pm_offset   = (int)speaker_isr;
+	new_isr.pm_selector = _go32_my_cs();
+
+	_go32_dpmi_chain_protected_mode_interrupt_vector(
+		TIMER_IRQ,
+		&new_isr
+	);
+
+	//Set clock divisor to 44191Hz
+	outportb(0x43,0x34);
+	outportb(0x40,TIMER_DIV&0xFF);
+	outportb(0x40,TIMER_DIV>>8);
+
+	//Allocate slots
+	ice_log((ice_char*)"Allocating sound slots...");
+
+	samples = calloc(
+		MAX_SAMPLES,
+		sizeof(audio_sample)
+	);
+
+	sources = calloc(
+		MAX_SOURCES,
+		sizeof(audio_source)
+	);
+
+	streams = calloc(
+		MAX_STREAMS,
+		sizeof(audio_stream)
+	);
+
+	if (
+		samples == NULL ||
+		sources == NULL ||
+		streams == NULL
+	) {
+		ice_log((ice_char *)"Failed to allocate sound slots!");
+
+		return 1;
 	}
-	
-	{ //Allocate slots
-		samples = calloc(
-			MAX_SAMPLES,
-			sizeof(audio_sample)
-		);
-		
-		sources = calloc(
-			MAX_SOURCES,
-			sizeof(audio_source)
-		);
-		
-		audio_streams = calloc(
-			MAX_STREAMS,
-			sizeof(audio_stream)
-		);
-	}
-	
+
 	return 0;
 }
 
 void ice_audio_deinit() {
-	ice_log((ice_char*)"Stopping DSP...");
-	
-	//Stop DMA-transfer
-	dsp_write(0xD0);
-	dsp_write(0xDA);
-	
-	//Free the memory allocated to the sound buffer
-	if (dsp_dma_buffer!=NULL) {
-		free(dsp_dma_buffer);
-		dsp_dma_buffer=NULL;
+	if (speaker_buffer==NULL) {
+		return;
 	}
-	
+
+	free(speaker_buffer);
+	speaker_buffer=NULL;
+
+	outportb(0x43,0x34);
+	outportb(0x40,0);
+	outportb(0x40,0);
+
+	_go32_dpmi_set_protected_mode_interrupt_vector(
+		TIMER_IRQ,
+		&old_isr
+	);
+
 	ice_audio_sample_flush();
 	ice_audio_source_flush();
-	
+	ice_audio_stream_flush();
+
 	if (samples!=NULL) {
 		free(samples);
 		samples=NULL;
 	}
-	
+
 	if (sources!=NULL) {
 		free(sources);
 		sources=NULL;
 	}
-	
-	if (audio_streams!=NULL) {
-		free(audio_streams);
-		audio_streams=NULL;
+
+	if (streams!=NULL) {
+		free(streams);
+		streams=NULL;
+		
+		return;
 	}
 }
 
@@ -365,41 +299,41 @@ ice_uint ice_audio_sample_load(
 ) {
 	if (samples==NULL) {
 		ice_log((ice_char *)"Audio is not initialized!");
-		
+
 		return 0;
 	}
-	
+
 	ice_uint      sample_id = 0;
 	audio_sample *sample    = NULL;
-	
+
 	for (ice_uint i=0; i<MAX_SAMPLES; i++) {
 		if (samples[i].data==NULL) {
 			sample_id = i;
 			sample    = &samples[i];
-			
+
 			break;
 		}
 	}
-	
+
 	if (sample==NULL) {
 		ice_log((ice_char *)"Exceeded audio samples limit");
-		
+
 		return 0;
 	}
-	
+
 	char filename[32];
 	sprintf(
 		filename,
 		"%u.ogg",
 		(unsigned int)file_id
 	);
-	
+
 	stb_vorbis *stream = stb_vorbis_open_filename(
 		filename,
 		NULL,
 		NULL
 	);
-	
+
 	if (stream==NULL) {
 		ice_char msg[64];
 		sprintf(
@@ -408,16 +342,16 @@ ice_uint ice_audio_sample_load(
 			file_id
 		);
 		ice_log(msg);
-		
+
 		return 0;
 	}
-	
+
 	stb_vorbis_info info = stb_vorbis_get_info(stream);
-	
+
 	sample->rate   = info.sample_rate;
 	sample->length = stb_vorbis_stream_length_in_samples(stream);
 	sample->data   = malloc(sample->length);
-	
+
 	if (sample->data==NULL) {
 		ice_char msg[64];
 		sprintf(
@@ -426,19 +360,19 @@ ice_uint ice_audio_sample_load(
 			file_id
 		);
 		ice_log(msg);
-		
+
 		stb_vorbis_close(stream);
-		
+
 		sample->length = 0;
 		sample->rate   = 0;
-		
+
 		return 0;
 	}
-	
+
 	short buffer[256];
 	int   decoded;
 	int   data_index = 0;
-	
+
 	do {
 		decoded=stb_vorbis_get_samples_short_interleaved(
 			stream,
@@ -446,27 +380,27 @@ ice_uint ice_audio_sample_load(
 			buffer,
 			256
 		);
-		
+
 		for (
 			int i=0;
 			i<decoded*info.channels;
 			i+=info.channels
 		) {
 			int pulse=32767;
-			
-			//Convert stereo down to mono
+
+			//Convert 16 bit stereo down to 8 bit mono
 			for (int j=0; j<info.channels; j++) {
-				pulse = (pulse+buffer[i+j]+32767)/2;
+				pulse = (pulse+buffer[i+j])/2;
 			}
-			
-			sample->data[data_index]=(unsigned char)(pulse/256);
-			
+
+			sample->data[data_index]=(unsigned char)(pulse/127);
+
 			data_index++;
 		}
 	} while (decoded>0);
-	
+
 	stb_vorbis_close(stream);
-	
+
 	return sample_id;
 }
 
@@ -480,11 +414,11 @@ void ice_audio_sample_delete(
 	) {
 		return;
 	}
-	
+
 	audio_sample *sample=&samples[sample_id];
-	
+
 	free(sample->data);
-	
+
 	sample->data   = NULL;
 	sample->rate   = 0;
 	sample->length = 0;
@@ -494,15 +428,15 @@ ice_real ice_audio_sample_length_get(
 	ice_uint sample_id
 ) {
 	if (
-		samples==NULL || 
+		samples==NULL ||
 		sample_id>=MAX_SAMPLES ||
 		samples[sample_id].data==NULL
 	) {
 		return 0;
 	}
-	
+
 	audio_sample *sample=&samples[sample_id];
-	
+
 	return (ice_real)sample->length/sample->rate;
 }
 
@@ -518,20 +452,20 @@ ice_uint ice_audio_source_new() {
 	if (sources==NULL) {
 		return 0;
 	}
-	
+
 	for (unsigned int i=0; i<MAX_SOURCES; i++) {
 		if (sources[i].state==ICE_AUDIO_STATE_NONE) {
 			audio_source *source=&sources[i];
-			
+
 			source->state     = ICE_AUDIO_STATE_PAUSED;
 			source->sample_id = 0;
 			source->position  = 0;
 			source->volume    = 255;
-			
+
 			return (ice_uint)i;
 		}
 	}
-	
+
 	return 0;
 }
 
@@ -539,15 +473,15 @@ void ice_audio_source_delete(
 	ice_uint source_id
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
-	
+
 	audio_source *source=&sources[source_id];
-	
+
 	source->state     = ICE_AUDIO_STATE_NONE;
 	source->sample_id = 0;
 	source->position  = 0;
@@ -558,13 +492,13 @@ ice_uint ice_audio_source_sample_get(
 	ice_uint source_id
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
-	
+
 	return (ice_uint)sources[source_id].sample_id;
 }
 
@@ -573,16 +507,16 @@ void ice_audio_source_sample_set(
 	ice_uint sample_id
 ) {
 	if (
-		sources==NULL || 
-		source_id>=MAX_SOURCES || 
+		sources==NULL ||
+		source_id>=MAX_SOURCES ||
 		sample_id>=MAX_SAMPLES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
-	
+
 	audio_source *source=&sources[source_id];
-	
+
 	source->sample_id = sample_id;
 	source->position  = 0;
 }
@@ -591,25 +525,25 @@ ice_real ice_audio_source_position_get(
 	ice_uint source_id
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
-	
+
 	audio_source *source=&sources[source_id];
-	
+
 	ice_uint sample_id   = source->sample_id;
 	audio_sample *sample = &samples[sample_id];
-	
+
 	if (
 		sample_id>=MAX_SAMPLES ||
 		sample->data==NULL
 	) {
 		return 0;
 	}
-	
+
 	return (ice_real)sources[source_id].position/sample->rate;
 }
 
@@ -618,29 +552,29 @@ void ice_audio_source_position_set(
 	ice_real position
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
-	
+
 	audio_source *source=&sources[source_id];
-	
+
 	ice_uint sample_id   = source->sample_id;
 	audio_sample *sample = &samples[sample_id];
-	
+
 	if (
 		sample_id>=MAX_SAMPLES ||
 		sample->data==NULL
 	) {
 		return;
 	}
-	
+
 	ice_uint sample_position = (ice_uint)(
 		position*(ice_real)sample->rate
 	);
-	
+
 	source->position=MAX(
 		sample_position,
 		sample->length
@@ -651,13 +585,13 @@ ice_uint ice_audio_source_state_get(
 	ice_uint source_id
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
-		return 0;
+		return ICE_AUDIO_STATE_PAUSED;
 	}
-	
+
 	return (ice_uint)sources[source_id].state;
 }
 
@@ -666,24 +600,24 @@ void ice_audio_source_state_set(
 	ice_uint state
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
-	
+
 	audio_source *source=&sources[source_id];
-	
+
 	switch(state) {
-		case ICE_AUDIO_STATE_PAUSED:
-			source->state=ICE_AUDIO_STATE_PAUSED;
-			break;
 		case ICE_AUDIO_STATE_PLAYING:
 			source->state=ICE_AUDIO_STATE_PLAYING;
 			break;
 		case ICE_AUDIO_STATE_LOOPING:
 			source->state=ICE_AUDIO_STATE_LOOPING;
+			break;
+		default:
+			source->state=ICE_AUDIO_STATE_PAUSED;
 	}
 }
 
@@ -691,13 +625,13 @@ ice_real ice_audio_source_volume_get(
 	ice_uint source_id
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return 0;
 	}
-	
+
 	return (ice_real)sources[source_id].volume/255;
 }
 
@@ -706,21 +640,21 @@ void ice_audio_source_volume_set(
 	ice_real volume
 ) {
 	if (
-		sources==NULL || 
+		sources==NULL ||
 		source_id>=MAX_SOURCES ||
 		sources[source_id].state==ICE_AUDIO_STATE_NONE
 	) {
 		return;
 	}
-	
+
 	volume = MAX(volume,0);
 	volume = MIN(volume,1);
-	
+
 	sources[source_id].volume=(ice_char)(volume*255);
 }
 
 void ice_audio_stream_flush() {
-	if (audio_streams!=NULL) {
+	if (streams!=NULL) {
 		for (ice_uint i=0; i<MAX_STREAMS; i++) {
 			ice_audio_stream_delete(i);
 		}
@@ -730,43 +664,43 @@ void ice_audio_stream_flush() {
 ice_uint ice_audio_stream_load(
 	ice_uint file_id
 ) {
-	if (audio_streams==NULL) {
+	if (streams==NULL) {
 		ice_log((ice_char *)"Audio is not initialized!");
-		
+
 		return 0;
 	}
-	
+
 	ice_uint      stream_id = 0;
 	audio_stream *stream    = NULL;
-	
+
 	for (ice_uint i=0; i<MAX_STREAMS; i++) {
-		if (audio_streams[i].ogg_stream==NULL) {
+		if (streams[i].ogg_stream==NULL) {
 			stream_id = i;
-			stream    = &audio_streams[i];
-			
+			stream    = &streams[i];
+
 			break;
 		}
 	}
-	
+
 	if (stream==NULL) {
-		ice_log((ice_char *)"Exceeded audio audio_streams limit");
-		
+		ice_log((ice_char *)"Exceeded audio streams limit");
+
 		return 0;
 	}
-	
+
 	char filename[32];
 	sprintf(
 		filename,
 		"%u.ogg",
 		(unsigned int)file_id
 	);
-	
+
 	stb_vorbis *ogg_stream = stb_vorbis_open_filename(
 		filename,
 		NULL,
 		NULL
 	);
-	
+
 	if (ogg_stream==NULL) {
 		ice_char msg[64];
 		sprintf(
@@ -775,12 +709,12 @@ ice_uint ice_audio_stream_load(
 			file_id
 		);
 		ice_log(msg);
-		
+
 		return 0;
 	}
-	
+
 	stb_vorbis_info info = stb_vorbis_get_info(ogg_stream);
-	
+
 	stream->ogg_stream = ogg_stream;
 	stream->channels    = info.channels;
 	stream->rate       = info.sample_rate;
@@ -788,7 +722,7 @@ ice_uint ice_audio_stream_load(
 	stream->position   = 0;
 	stream->volume     = 0;
 	stream->state      = ICE_AUDIO_STATE_PAUSED;
-	
+
 	return stream_id;
 }
 
@@ -796,17 +730,17 @@ void ice_audio_stream_delete(
 	ice_uint stream_id
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	stb_vorbis_close(stream->ogg_stream);
-	
+
 	stream->ogg_stream = NULL;
 	stream->channels   = 0;
 	stream->rate       = 0;
@@ -820,15 +754,15 @@ ice_real ice_audio_stream_length_get(
 	ice_uint stream_id
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return 0;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	return (ice_real)stream->length/stream->rate;
 }
 
@@ -836,15 +770,15 @@ ice_real ice_audio_stream_position_get(
 	ice_uint stream_id
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return 0;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	return 0; //TODO
 }
 
@@ -853,15 +787,15 @@ void ice_audio_stream_position_set(
 	ice_real position
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	//TODO
 }
 
@@ -869,15 +803,15 @@ ice_uint ice_audio_stream_state_get(
 	ice_uint stream_id
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return ICE_AUDIO_STATE_NONE;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	return stream->state;
 }
 
@@ -886,24 +820,24 @@ void ice_audio_stream_state_set(
 	ice_uint state
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	switch(state) {
-		case ICE_AUDIO_STATE_PAUSED:
-			stream->state=ICE_AUDIO_STATE_PAUSED;
-			break;
 		case ICE_AUDIO_STATE_PLAYING:
 			stream->state=ICE_AUDIO_STATE_PLAYING;
 			break;
 		case ICE_AUDIO_STATE_LOOPING:
 			stream->state=ICE_AUDIO_STATE_LOOPING;
+			break;
+		default:
+			stream->state=ICE_AUDIO_STATE_PAUSED;
 	}
 }
 
@@ -911,15 +845,15 @@ ice_real ice_audio_stream_volume_get(
 	ice_uint stream_id
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return 0;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	return (ice_real)stream->volume/255;
 }
 
@@ -928,17 +862,17 @@ void ice_audio_stream_volume_set(
 	ice_real volume
 ) {
 	if (
-		audio_streams==NULL || 
+		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
-		audio_streams[stream_id].ogg_stream==NULL
+		streams[stream_id].ogg_stream==NULL
 	) {
 		return;
 	}
-	
-	audio_stream *stream = &audio_streams[stream_id];
-	
+
+	audio_stream *stream = &streams[stream_id];
+
 	volume = MAX(volume,0);
 	volume = MIN(volume,1);
-	
+
 	stream->volume=(ice_char)(volume*255);
 }

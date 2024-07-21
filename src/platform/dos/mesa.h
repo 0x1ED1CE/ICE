@@ -1,10 +1,10 @@
+#include "ice.h"
+
 #include <stdint.h>
 
 #include "lib/mesa/include/GL/gl.h"
 #include "lib/mesa/include/GL/glu.h"
 #include "lib/mesa/include/GL/dmesa.h"
-
-#include "ice.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "lib/stb/stb_image.h"
@@ -42,10 +42,213 @@ static DMesaBuffer  buffers[2];
 
 static unsigned int current_buffer;
 
-static GLuint *textures;
+static GLuint           *textures = NULL;
+static ice_video_array  *arrays   = NULL;
+static ice_video_stream *streams  = NULL;
 
-static ice_video_array  *arrays  = NULL;
-static ice_video_stream *streams = NULL;
+ice_uint ice_video_init(
+	ice_uint width,
+	ice_uint height
+) {
+	{ //Initialize OpenGL
+		visual = DMesaCreateVisual(
+			width,  // X res
+			height, // Y res
+			16,     // BPP
+			0,      // refresh rate: 0=default
+			1,      // double-buffered
+			1,      // RGB mode
+			8,      // requested bits/alpha
+			16,     // requested bits/depth
+			0,      // requested bits/stencil
+			0       // requested bits/accum
+		);
+		
+		context = DMesaCreateContext(
+			visual,
+			NULL
+		);
+		
+		buffers[0] = DMesaCreateBuffer(
+			visual,
+			0,     // X pos
+			0,     // Y pos
+			width, // X res
+			height // Y res
+		);
+		
+		buffers[1] = DMesaCreateBuffer(
+			visual,
+			0,     // X pos
+			0,     // Y pos
+			width, // X res
+			height // Y res
+		);
+		
+		DMesaMakeCurrent(
+			context,
+			buffers[0]
+		);
+	}
+	
+	{ //Allocate slots
+		textures = calloc(
+			MAX_TEXTURES,
+			sizeof(GLuint)
+		);
+		
+		arrays = calloc(
+			MAX_ARRAYS,
+			sizeof(ice_video_array)
+		);
+		
+		streams = calloc(
+			MAX_STREAMS,
+			sizeof(ice_video_stream)
+		);
+		
+		if (
+			textures == NULL ||
+			arrays   == NULL ||
+			streams  == NULL
+		) {
+			ice_log((ice_char *)"Failed to allocate video slots!");
+			
+			return 1;
+		}
+	}
+	
+	{ //Setup default OpenGL states
+		glEnable(GL_TEXTURE_2D);
+		glCullFace(GL_BACK);
+	}
+	
+	return 0;
+}
+
+void ice_video_deinit() {	
+	ice_video_texture_flush();
+	ice_video_array_flush();
+	ice_video_stream_flush();
+	
+	if (textures!=NULL) {
+		free(textures);
+		textures=NULL;
+	}
+	
+	if (arrays!=NULL) {
+		free(arrays);
+		arrays=NULL;
+	}
+	
+	if (streams!=NULL) {
+		free(streams);
+		streams=NULL;
+	}
+	
+	DMesaDestroyBuffer(buffers[0]);
+	DMesaDestroyBuffer(buffers[1]);
+	DMesaDestroyContext(context);
+	DMesaDestroyVisual(visual);
+}
+
+void ice_video_buffer(ice_real tick) {
+	current_buffer=~current_buffer&0x01;
+	
+	DMesaSwapBuffers(buffers[current_buffer]);
+	
+	//Update texture streams
+	for (ice_uint i=0; i<MAX_STREAMS; i++) {
+		ice_video_stream *stream=&streams[i];
+		
+		if (
+			stream->plm!=NULL && 
+			plm_get_video_enabled(stream->plm)
+		) {
+			int width     = plm_get_width(stream->plm);
+			int height    = plm_get_height(stream->plm);
+			ice_real time = plm_get_time(stream->plm);
+			
+			plm_frame_t *frame;
+			
+			do {
+				frame=plm_decode_video(stream->plm);
+			} while (
+				frame!=NULL &&
+				(ice_real)plm_get_time(stream->plm)-time<tick
+			);
+			
+			if (frame!=NULL) {
+				plm_frame_to_rgb(
+					frame,
+					stream->buffer,
+					(int)width*3
+				);
+				
+				glBindTexture(
+					GL_TEXTURE_2D,
+					textures[stream->texture_id]
+				);
+				glTexSubImage2D(
+					GL_TEXTURE_2D,
+					0,
+					0,
+					0,
+					(GLsizei)width,
+					(GLsizei)height,
+					GL_RGB,
+					GL_UNSIGNED_BYTE,
+					stream->buffer
+				);
+				glBindTexture(GL_TEXTURE_2D,0);
+			}
+		}
+	}
+}
+
+void ice_video_clear(
+	ice_uint attribute
+) {
+	switch(attribute) {
+		case ICE_VIDEO_BUFFER_COLOR:
+			glClearColor(0,0,0,0);
+			glClear(GL_COLOR_BUFFER_BIT);
+			
+			break;
+		case ICE_VIDEO_BUFFER_DEPTH:
+			glClear(GL_DEPTH_BUFFER_BIT);
+	}
+}
+
+void ice_video_texture_flush() {
+	if (textures==NULL) {
+		return;
+	}
+	
+	for (ice_uint i=1; i<MAX_TEXTURES; i++) {
+		ice_video_texture_delete(i);
+	}
+}
+
+void ice_video_array_flush() {
+	if (arrays==NULL) {
+		return;
+	}
+	
+	for (ice_uint i=1; i<MAX_ARRAYS; i++) {
+		ice_video_array_delete(i);
+	}
+}
+
+void ice_video_stream_flush() {
+	if (streams==NULL) {
+		return;
+	}
+	
+	for (ice_uint i=0; i<MAX_STREAMS; i++) {
+		ice_video_stream_delete(i<<16);
+	}
+}
 
 ice_uint ice_video_width_get() {
 	return 640;
@@ -90,12 +293,12 @@ ice_uint ice_video_texture_new(
 			glTexParameteri(
 				GL_TEXTURE_2D,
 				GL_TEXTURE_MIN_FILTER,
-				GL_LINEAR
+				GL_NEAREST
 			);
 			glTexParameteri(
 				GL_TEXTURE_2D,
 				GL_TEXTURE_MAG_FILTER,
-				GL_LINEAR
+				GL_NEAREST
 			);
 			glTexImage2D(
 				GL_TEXTURE_2D,
@@ -294,11 +497,12 @@ void ice_video_texture_rectangle_draw(
 	texture_id&=0xFFFF;
 	
 	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 	glBlendFunc(
 		GL_SRC_ALPHA,
 		GL_ONE_MINUS_SRC_ALPHA
 	);
-	glEnable(GL_TEXTURE_2D);
 	glTexEnvi(
 		GL_TEXTURE_ENV,
 		GL_COMBINE_RGB,
@@ -358,9 +562,6 @@ void ice_video_texture_rectangle_draw(
 	);
 	glEnd();
 	glFlush();
-	glBindTexture(GL_TEXTURE_2D,0);
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_BLEND);
 }
 
 void ice_video_texture_triangle_draw(
@@ -393,7 +594,8 @@ void ice_video_texture_triangle_draw(
 	texture_id&=0xFFFF;
 	
 	glEnable(GL_BLEND);
-	glEnable(GL_TEXTURE_2D);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
 	glTexEnvi(
 		GL_TEXTURE_ENV,
 		GL_COMBINE_RGB,
@@ -456,9 +658,6 @@ void ice_video_texture_triangle_draw(
 	);
 	glEnd();
 	glFlush();
-	glBindTexture(GL_TEXTURE_2D,0);
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_BLEND);
 }
 
 ice_uint ice_video_array_new(
@@ -625,7 +824,7 @@ ice_uint ice_video_model_load(
 	);
 	
 	ice_uint model_id = ice_video_array_new(
-		ICE_VIDEO_ARRAY_TYPE_MODEL_3,
+		ICE_VIDEO_ARRAY_MODEL_3,
 		(ice_uint)mat_count_attributes(
 			filename,
 			MAT_ATTRIBUTE_FACE
@@ -634,12 +833,12 @@ ice_uint ice_video_model_load(
 	
 	for (ice_uint m=0; faces.data!=NULL; m+=3) {
 		ice_uint vertex_id = ice_video_array_new(
-			ICE_VIDEO_ARRAY_TYPE_POSITION_3,
+			ICE_VIDEO_ARRAY_POSITION_3,
 			(ice_uint)faces.size
 		);
 		
 		ice_uint texture_id = ice_video_array_new(
-			ICE_VIDEO_ARRAY_TYPE_TEXTURE_2,
+			ICE_VIDEO_ARRAY_TEXTURE_2,
 			(ice_uint)faces.size/9*6
 		);
 		
@@ -714,17 +913,17 @@ void ice_video_model_draw(
 	
 	if (
 		projection_array==NULL ||
-		projection_array->type!=ICE_VIDEO_ARRAY_TYPE_MATRIX_16 ||
+		projection_array->type!=ICE_VIDEO_ARRAY_MATRIX_16 ||
 		model_array==NULL ||
-		model_array->type!=ICE_VIDEO_ARRAY_TYPE_MODEL_3
+		model_array->type!=ICE_VIDEO_ARRAY_MODEL_3
 	) {
 		return;
 	}
 	
-	//glEnable(GL_BLEND);
-	glEnable(GL_CULL_FACE);
-	glEnable(GL_TEXTURE_2D);
+	glDisable(GL_BLEND);
+	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_ALPHA_TEST);
+	glEnable(GL_CULL_FACE);
 	glAlphaFunc(GL_EQUAL,1.0);
 	glLoadMatrixf(projection_array->data);
 	
@@ -747,9 +946,9 @@ void ice_video_model_draw(
 			/*
 			if (
 				position_array==NULL ||
-				position_array->type!=ICE_VIDEO_ARRAY_TYPE_POSITION_3 ||
+				position_array->type!=ICE_VIDEO_ARRAY_POSITION_3 ||
 				texture_array==NULL ||
-				texture_array->type!=ICE_VIDEO_ARRAY_TYPE_TEXTURE_2
+				texture_array->type!=ICE_VIDEO_ARRAY_TEXTURE_2
 			) {
 				return;
 			}
@@ -803,11 +1002,6 @@ void ice_video_model_draw(
 	}
 	
 	glFlush();
-	glBindTexture(GL_TEXTURE_2D,0);
-	//glDepthMask(GL_TRUE);
-	glDisable(GL_TEXTURE_2D);
-	glDisable(GL_CULL_FACE);
-	//glDisable(GL_BLEND);
 }
 
 ice_uint ice_video_stream_load(
@@ -1009,18 +1203,18 @@ ice_uint ice_video_stream_state_get(
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
-		return ICE_VIDEO_STATE_PAUSED;
+		return ICE_VIDEO_STREAM_PAUSED;
 	}
 	
 	ice_video_stream *stream = &streams[stream_id];
 	
 	if (plm_get_loop(stream->plm)) {
-		return ICE_VIDEO_STATE_LOOPING;
+		return ICE_VIDEO_STREAM_LOOPING;
 	} else if(plm_get_video_enabled(stream->plm)) {
-		return ICE_VIDEO_STATE_PLAYING;
+		return ICE_VIDEO_STREAM_PLAYING;
 	}
 	
-	return ICE_VIDEO_STATE_PAUSED;
+	return ICE_VIDEO_STREAM_PAUSED;
 }
 
 void ice_video_stream_state_set(
@@ -1040,7 +1234,7 @@ void ice_video_stream_state_set(
 	ice_video_stream *stream = &streams[stream_id];
 	
 	switch(state) {
-		case ICE_VIDEO_STATE_PLAYING:
+		case ICE_VIDEO_STREAM_PLAYING:
 			plm_set_video_enabled(
 				stream->plm,
 				TRUE
@@ -1051,7 +1245,7 @@ void ice_video_stream_state_set(
 			);
 			
 			break;
-		case ICE_VIDEO_STATE_LOOPING:
+		case ICE_VIDEO_STREAM_LOOPING:
 			plm_set_video_enabled(
 				stream->plm,
 				TRUE
@@ -1072,210 +1266,4 @@ void ice_video_stream_state_set(
 				FALSE
 			);
 	}
-}
-
-void ice_video_depth_set(
-	ice_uint state
-) {
-	if (!state) {
-		glDisable(GL_DEPTH_TEST);
-	} else {
-		glEnable(GL_DEPTH_TEST);
-	}
-}
-
-ice_uint ice_video_depth_get() {
-	return (ice_uint)glIsEnabled(GL_DEPTH_TEST);
-}
-
-void ice_video_texture_flush() {
-	if (textures==NULL) {
-		return;
-	}
-	
-	for (ice_uint i=1; i<MAX_TEXTURES; i++) {
-		ice_video_texture_delete(i);
-	}
-}
-
-void ice_video_array_flush() {
-	if (arrays==NULL) {
-		return;
-	}
-	
-	for (ice_uint i=1; i<MAX_ARRAYS; i++) {
-		ice_video_array_delete(i);
-	}
-}
-
-void ice_video_stream_flush() {
-	if (streams==NULL) {
-		return;
-	}
-	
-	for (ice_uint i=0; i<MAX_STREAMS; i++) {
-		ice_video_stream_delete(i<<16);
-	}
-}
-
-void ice_video_buffer(ice_real tick) {
-	current_buffer=~current_buffer&0x01;
-	
-	DMesaSwapBuffers(buffers[current_buffer]);
-	
-	//Clear screen
-	glClearColor(0,0,0,0);
-	glClear(
-		GL_COLOR_BUFFER_BIT|
-		GL_DEPTH_BUFFER_BIT
-	);
-	
-	//Update texture streams
-	for (ice_uint i=0; i<MAX_STREAMS; i++) {
-		ice_video_stream *stream=&streams[i];
-		
-		if (
-			stream->plm!=NULL && 
-			plm_get_video_enabled(stream->plm)
-		) {
-			int width     = plm_get_width(stream->plm);
-			int height    = plm_get_height(stream->plm);
-			ice_real time = plm_get_time(stream->plm);
-			
-			plm_frame_t *frame;
-			
-			do {
-				frame=plm_decode_video(stream->plm);
-			} while (
-				frame!=NULL &&
-				(ice_real)plm_get_time(stream->plm)-time<tick
-			);
-			
-			if (frame!=NULL) {
-				plm_frame_to_rgb(
-					frame,
-					stream->buffer,
-					(int)width*3
-				);
-				
-				glBindTexture(
-					GL_TEXTURE_2D,
-					textures[stream->texture_id]
-				);
-				glTexSubImage2D(
-					GL_TEXTURE_2D,
-					0,
-					0,
-					0,
-					(GLsizei)width,
-					(GLsizei)height,
-					GL_RGB,
-					GL_UNSIGNED_BYTE,
-					stream->buffer
-				);
-				glBindTexture(GL_TEXTURE_2D,0);
-			}
-		}
-	}
-}
-
-ice_uint ice_video_init(
-	ice_uint width,
-	ice_uint height
-) {
-	{ //Initialize OpenGL
-		visual = DMesaCreateVisual(
-			width,  // X res
-			height, // Y res
-			16,     // BPP
-			0,      // refresh rate: 0=default
-			1,      // double-buffered
-			1,      // RGB mode
-			8,      // requested bits/alpha
-			16,     // requested bits/depth
-			0,      // requested bits/stencil
-			0       // requested bits/accum
-		);
-		
-		context = DMesaCreateContext(
-			visual,
-			NULL
-		);
-		
-		buffers[0] = DMesaCreateBuffer(
-			visual,
-			0,     // X pos
-			0,     // Y pos
-			width, // X res
-			height // Y res
-		);
-		
-		buffers[1] = DMesaCreateBuffer(
-			visual,
-			0,     // X pos
-			0,     // Y pos
-			width, // X res
-			height // Y res
-		);
-		
-		DMesaMakeCurrent(
-			context,
-			buffers[0]
-		);
-	}
-	
-	{ //Allocate slots
-		textures = calloc(
-			MAX_TEXTURES,
-			sizeof(GLuint)
-		);
-		
-		arrays = calloc(
-			MAX_ARRAYS,
-			sizeof(ice_video_array)
-		);
-		
-		streams = calloc(
-			MAX_STREAMS,
-			sizeof(ice_video_stream)
-		);
-		
-		if (
-			textures == NULL ||
-			arrays   == NULL ||
-			streams  == NULL
-		) {
-			ice_log((ice_char *)"Failed to allocate video slots!");
-			
-			return 1;
-		}
-	}
-	
-	return 0;
-}
-
-void ice_video_deinit() {	
-	ice_video_texture_flush();
-	ice_video_array_flush();
-	ice_video_stream_flush();
-	
-	if (textures!=NULL) {
-		free(textures);
-		textures=NULL;
-	}
-	
-	if (arrays!=NULL) {
-		free(arrays);
-		arrays=NULL;
-	}
-	
-	if (streams!=NULL) {
-		free(streams);
-		streams=NULL;
-	}
-	
-	DMesaDestroyBuffer(buffers[0]);
-	DMesaDestroyBuffer(buffers[1]);
-	DMesaDestroyContext(context);
-	DMesaDestroyVisual(visual);
 }
