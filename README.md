@@ -14,6 +14,7 @@ ICE is a 3D game engine for DOS and other platforms. Written entirely in C99 wit
 - 3D hardware acceleration via 3dfx Voodoo
 - Full motion video playback (MPEG1)
 - Supports Creative Sound Blaster and Covox Speech Thing
+- Currently only supports Keyboard input
 
 ## TODO:
 - Audio streaming
