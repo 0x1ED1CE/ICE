@@ -1,20 +1,19 @@
 # ISO/C Engine
 ![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg)
 
-ICE is a 3D game engine for DOS and other platforms. Written entirely in C99 with optional bindings for [ISO](https://github.com/0x1ED1CE/ISO).
+ICE is a 3D game engine for DOS and other platforms.
 
-**NOTE:** This is still far from complete and needs a lot more work done!
+**NOTE:** This project is still in development and is not suitable for making games yet.
 
 ## Screenshot
 
 <img src="/screenshots/world.png?raw=true">
 
 ## Features:
-- 3D software rendering
-- 3D hardware acceleration via 3dfx Voodoo
-- Full motion video playback (MPEG1)
+- Supports 3dfx Voodoo 3D hardware acceleration and 3D software rendering
+- Supports full motion video playback (MPEG1)
 - Supports Creative Sound Blaster and Covox Speech Thing
-- Currently only supports Keyboard input
+- Currently only supports keyboard input
 
 ## TODO:
 - Audio streaming
