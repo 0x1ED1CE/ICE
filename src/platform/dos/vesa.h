@@ -36,6 +36,7 @@ VESA Super VGA Standard VS911022-8
 11Bh     -        1280x1024    16.8M (8:8:8)
 */
 
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 #include <malloc.h>
@@ -143,7 +144,6 @@ static unsigned int screen_width;
 static unsigned int screen_height;
 
 static ZBuffer          *framebuffer = NULL;
-static unsigned char    *screen      = NULL;
 static GLuint           *textures    = NULL;
 static ice_video_array  *arrays      = NULL;
 static ice_video_stream *streams     = NULL;
@@ -264,22 +264,22 @@ void vesa_buffer(
 	unsigned int bank_offset      = bank_size/bank_granularity;
 	unsigned int todo             = screen_size;
 	unsigned int copy_size        = bank_size;
-	
+
 	while (todo>0) {
 		set_vesa_bank(bank_number);
-		
+
 		if (todo>bank_size) {
 			copy_size=bank_size;
 		} else {
 			copy_size=todo;
 		}
-		
+
 		dosmemput(
 			buffer,
 			copy_size,
 			VIDEO_ADDRESS
 		);
-		
+
 		todo        -= copy_size;
 		buffer      += copy_size;
 		bank_number += bank_offset;
@@ -293,7 +293,7 @@ ice_uint ice_video_init(
 	//Initialize vesa
 	vesa_mode_get(VIDEO_MODE);
 	vesa_info_get();
-	
+
 	if (vesa_mode_set(VIDEO_MODE)) {
 		ice_char msg[64];
 		sprintf(
@@ -305,23 +305,10 @@ ice_uint ice_video_init(
 		
 		return 1;
 	}
-	
-	screen = calloc(
-		width*
-		height*
-		VIDEO_BYTES,
-		sizeof(unsigned char)
-	);
-	
-	if (screen==NULL) {
-		ice_log((ice_char *)"Failed to initialize vesa buffer!");
-		
-		return 1;
-	}
-	
+
 	screen_width  = width;
 	screen_height = height;
-	
+
 	//Initialize OpenGL
 	framebuffer = ZB_open(
 		(GLuint)width,
@@ -329,31 +316,31 @@ ice_uint ice_video_init(
 		ZB_MODE_5R6G5B,
 		NULL
 	);
-	
+
 	if (framebuffer==NULL) {
 		ice_log((ice_char *)"Failed to initialize framebuffer!");
 		
 		return 1;
 	}
-	
+
 	glInit(framebuffer);
-	
+
 	//Allocate slots
 	textures = calloc(
 		MAX_TEXTURES,
 		sizeof(GLuint)
 	);
-	
+
 	arrays = calloc(
 		MAX_ARRAYS,
 		sizeof(ice_video_array)
 	);
-	
+
 	streams = calloc(
 		MAX_STREAMS,
 		sizeof(ice_video_stream)
 	);
-	
+
 	if (
 		textures == NULL ||
 		arrays   == NULL ||
@@ -363,11 +350,11 @@ ice_uint ice_video_init(
 		
 		return 1;
 	}
-	
+
 	//Setup default OpenGL states
 	glEnable(GL_TEXTURE_2D);
 	glCullFace(GL_BACK);
-	
+
 	return 0;
 }
 
@@ -375,32 +362,27 @@ void ice_video_deinit() {
 	ice_video_texture_flush();
 	ice_video_array_flush();
 	ice_video_stream_flush();
-	
+
 	if (textures!=NULL) {
 		free(textures);
 		textures=NULL;
 	}
-	
+
 	if (arrays!=NULL) {
 		free(arrays);
 		arrays=NULL;
 	}
-	
+
 	if (streams!=NULL) {
 		free(streams);
 		streams=NULL;
 	}
-	
-	if (screen!=NULL) {
-		free(screen);
-		screen=NULL;
-	}
-	
+
 	if (framebuffer!=NULL) {
 		ZB_close(framebuffer);
 		glClose();
 	}
-	
+
 	vesa_mode_set(0x000);
 }
 
@@ -712,7 +694,6 @@ ice_uint ice_video_texture_width_get(
 	texture_id&=0xFFFF;
 	
 	if (
-		textures==NULL ||
 		texture_id>MAX_TEXTURES ||
 		textures[texture_id]==0
 	) {
@@ -739,7 +720,6 @@ ice_uint ice_video_texture_height_get(
 	texture_id&=0xFFFF;
 	
 	if (
-		textures==NULL ||
 		texture_id>MAX_TEXTURES ||
 		textures[texture_id]==0
 	) {
@@ -1009,7 +989,6 @@ ice_uint ice_video_array_size_get(
 	ice_uint array_id
 ) {
 	if (
-		arrays==NULL ||
 		array_id>MAX_ARRAYS ||
 		arrays[array_id].data==NULL
 	) {
@@ -1025,7 +1004,6 @@ void ice_video_array_set(
 	ice_real value
 ) {
 	if (
-		arrays==NULL ||
 		array_id>MAX_ARRAYS ||
 		arrays[array_id].data==NULL
 	) {
@@ -1044,7 +1022,6 @@ ice_real ice_video_array_get(
 	ice_uint index
 ) {
 	if (
-		arrays==NULL ||
 		array_id>MAX_ARRAYS ||
 		arrays[array_id].data==NULL
 	) {
@@ -1169,7 +1146,6 @@ ice_video_array *ice_video_array_fetch(
 	ice_uint array_id
 ) {
 	if (
-		arrays==NULL ||
 		array_id>MAX_ARRAYS ||
 		arrays[array_id].data==NULL
 	) {
@@ -1427,7 +1403,6 @@ ice_real ice_video_stream_length_get(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
@@ -1445,7 +1420,6 @@ ice_real ice_video_stream_width_get(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
@@ -1463,7 +1437,6 @@ ice_real ice_video_stream_height_get(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
@@ -1481,7 +1454,6 @@ ice_real ice_video_stream_position_get(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
@@ -1500,7 +1472,6 @@ void ice_video_stream_position_set(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
@@ -1522,7 +1493,6 @@ ice_uint ice_video_stream_state_get(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
@@ -1547,7 +1517,6 @@ void ice_video_stream_state_set(
 	stream_id>>=16;
 	
 	if (
-		streams==NULL ||
 		stream_id>=MAX_STREAMS ||
 		streams[stream_id].plm==NULL
 	) {
