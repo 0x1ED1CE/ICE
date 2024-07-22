@@ -1,7 +1,7 @@
 #ifndef ICE_H
 #define ICE_H
 
-#define ICE_VERSION 11
+#define ICE_VERSION 12
 
 typedef unsigned char ice_char;
 typedef unsigned int  ice_uint;
@@ -30,18 +30,21 @@ ice_real ice_clock_get();
 
 /***********************************[VIDEO]***********************************/
 
-#define ICE_VIDEO_ARRAY_TYPE_GENERIC_1  0x00
-#define ICE_VIDEO_ARRAY_TYPE_MATRIX_16  0x1F
-#define ICE_VIDEO_ARRAY_TYPE_POSITION_3 0x22
-#define ICE_VIDEO_ARRAY_TYPE_TEXTURE_2  0x31
-#define ICE_VIDEO_ARRAY_TYPE_NORMAL_3   0x42
-#define ICE_VIDEO_ARRAY_TYPE_MODEL_1    0x50
-#define ICE_VIDEO_ARRAY_TYPE_MODEL_2    0x51
-#define ICE_VIDEO_ARRAY_TYPE_MODEL_3    0x52
+#define ICE_VIDEO_ARRAY_GENERIC_1  0x00
+#define ICE_VIDEO_ARRAY_MATRIX_16  0x1F
+#define ICE_VIDEO_ARRAY_POSITION_3 0x22
+#define ICE_VIDEO_ARRAY_TEXTURE_2  0x31
+#define ICE_VIDEO_ARRAY_NORMAL_3   0x42
+#define ICE_VIDEO_ARRAY_MODEL_1    0x50
+#define ICE_VIDEO_ARRAY_MODEL_2    0x51
+#define ICE_VIDEO_ARRAY_MODEL_3    0x52
 
-#define ICE_VIDEO_STATE_PAUSED  0
-#define ICE_VIDEO_STATE_PLAYING 1
-#define ICE_VIDEO_STATE_LOOPING 2
+#define ICE_VIDEO_STREAM_PAUSED  0
+#define ICE_VIDEO_STREAM_PLAYING 1
+#define ICE_VIDEO_STREAM_LOOPING 2
+
+#define ICE_VIDEO_BUFFER_COLOR 0
+#define ICE_VIDEO_BUFFER_DEPTH 1
 
 ice_uint ice_video_init(
 	ice_uint width,
@@ -52,6 +55,10 @@ void ice_video_deinit();
 
 void ice_video_buffer(
 	ice_real tick
+);
+
+void ice_video_clear(
+	ice_uint attribute
 );
 
 void ice_video_texture_flush();
@@ -198,12 +205,6 @@ void ice_video_stream_state_set(
 	ice_uint stream_id,
 	ice_uint state
 );
-
-void ice_video_depth_set(
-	ice_uint state
-);
-
-ice_uint ice_video_depth_get();
 
 /***********************************[AUDIO]***********************************/
 
