@@ -19,11 +19,15 @@ ICE is a 3D game engine for DOS and other platforms.
 - Audio streaming
 - Mouse support
 - Joystick support
+- Scripting support
 - SDL2 port
 - Documentation
 
 ## How to build
 Refer to [src/Makefile](src/Makefile) for build instructions
+
+## How to use
+Refer to [src/ice.h](src/ice.h) for the API
 
 ## License
 This software is free to use. You can modify it and redistribute it under the terms of the 
