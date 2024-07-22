@@ -5,26 +5,19 @@
 # Once installed, run `make` in this directory
 # Make will generate libice.a
 #
-# Use the following command template to link and compile:
-# i586-pc-msdosdjgpp-gcc <source.c> -lice -lm -ligl -lgl -o <output.exe>
-#
-# Example:
+# To compile a demo program:
 # i586-pc-msdosdjgpp-gcc -I. demos/c99/triangle.c -L. -lice -lm -Llib/tinygl/lib -lTinyGL -o test.exe
 #
 # To compile with 3Dfx Voodoo support:
-# Edit platform/dos/video.c '#include "vesa.h"' to '#include "mesa.h"'
-#
-# Then when executing gcc:
-# Replace '-Llib/tinygl/lib -lTinyGL' with '-Llib/mesa/lib -ligl -lgl'
+# Edit platform/dos/video.c and replace vesa.h with mesa.h
+# Run make again
+# Swap '-Llib/tinygl/lib -lTinyGL' with '-Llib/mesa/lib -ligl -lgl'
 
 
-# You can find libigl.a and libgl.a from the Mesa graphics library
-# Prebuilt binaries should already exist under lib/mesa/lib
-#
 # To run, the following files must be in the same directory as the DOS program:
 # CWSDPMI.EXE
-# GL.DXE
-# GLIDE3X.DXE
+# GL.DXE      (Only if using 3dfx Voodoo)
+# GLIDE3X.DXE (Only if using 3dfx Voodoo)
 #
 # CWSDPMI.EXE should already be included but it can also be obtained from:
 # https://sandmann.dotster.com/cwsdpmi/
