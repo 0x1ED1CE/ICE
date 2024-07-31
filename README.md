@@ -11,15 +11,13 @@ ICE is a 3D game engine for DOS and other platforms.
 
 ## Features:
 - Supports 3dfx Voodoo 3D hardware acceleration and 3D software rendering
-- Supports full motion video playback (MPEG1)
 - Supports Creative Sound Blaster and Covox Speech Thing
-- Currently only supports keyboard input
+- Supports full motion video and audio streaming MPEG1/Ogg
+- Supports mouse and keyboard
 
 ## TODO:
-- Audio streaming
-- Mouse support
-- Joystick support
 - Scripting support
+- Joystick support
 - SDL2 port
 - Documentation
 
