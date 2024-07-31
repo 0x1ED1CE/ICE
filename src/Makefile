@@ -8,8 +8,8 @@
 # To compile a demo program:
 # i586-pc-msdosdjgpp-gcc -I. demos/c99/triangle.c -L. -lice -lm -Llib/tinygl/lib -lTinyGL -o test.exe
 #
-# To compile with 3Dfx Voodoo support:
-# Edit platform/dos/video.c and replace vesa.h with mesa.h
+# To compile with 3dfx Voodoo support:
+# Edit platform/dos/video.c and change vesa.h to mesa.h
 # Run make again
 # Swap '-Llib/tinygl/lib -lTinyGL' with '-Llib/mesa/lib -ligl -lgl'
 

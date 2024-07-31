@@ -37,6 +37,7 @@ VESA Super VGA Standard VS911022-8
 */
 
 #include <stdio.h>
+#include <math.h>
 #include <stdint.h>
 #include <string.h>
 #include <malloc.h>
@@ -69,9 +70,6 @@ VESA Super VGA Standard VS911022-8
 #define MAX_TEXTURES 256
 #define MAX_STREAMS  8
 #define MAX_ARRAYS   256
-
-#define MIN(a,b) ((a)<(b)?(a):(b))
-#define MAX(a,b) ((a)>(b)?(a):(b))
 
 typedef struct { 
 	unsigned char  VESASignature[4]    __attribute__ ((packed));
@@ -286,11 +284,13 @@ void vesa_buffer(
 	}
 }
 
-ice_uint ice_video_init(
-	ice_uint width,
-	ice_uint height
-) {
-	//Initialize vesa
+ice_uint ice_video_init() {
+	screen_width  = 320;
+	screen_height = 200;
+
+	//Change video mode
+	ice_log((ice_char *)"Changing video mode");
+
 	vesa_mode_get(VIDEO_MODE);
 	vesa_info_get();
 
@@ -306,26 +306,29 @@ ice_uint ice_video_init(
 		return 1;
 	}
 
-	screen_width  = width;
-	screen_height = height;
-
 	//Initialize OpenGL
+	ice_log((ice_char *)"Allocating framebuffer");
+	
 	framebuffer = ZB_open(
-		(GLuint)width,
-		(GLuint)height,
+		(GLuint)screen_width,
+		(GLuint)screen_height,
 		ZB_MODE_5R6G5B,
 		NULL
 	);
 
 	if (framebuffer==NULL) {
-		ice_log((ice_char *)"Failed to initialize framebuffer!");
+		ice_log((ice_char *)"Failed to allocate framebuffer!");
 		
 		return 1;
 	}
 
+	ice_log((ice_char *)"Initializing OpenGL");
+
 	glInit(framebuffer);
 
 	//Allocate slots
+	ice_log((ice_char *)"Allocating graphics slots");
+
 	textures = calloc(
 		MAX_TEXTURES,
 		sizeof(GLuint)
@@ -346,7 +349,7 @@ ice_uint ice_video_init(
 		arrays   == NULL ||
 		streams  == NULL
 	) {
-		ice_log((ice_char *)"Failed to allocate video slots!");
+		ice_log((ice_char *)"Failed to allocate graphics slots!");
 		
 		return 1;
 	}
@@ -354,11 +357,18 @@ ice_uint ice_video_init(
 	//Setup default OpenGL states
 	glEnable(GL_TEXTURE_2D);
 	glCullFace(GL_BACK);
+	glClearColor(0,0,0,0);
+	glClear(
+		GL_COLOR_BUFFER_BIT|
+		GL_DEPTH_BUFFER_BIT
+	);
 
 	return 0;
 }
 
-void ice_video_deinit() {	
+void ice_video_deinit() {
+	ice_log((ice_char *)"Flushing graphics slots");
+
 	ice_video_texture_flush();
 	ice_video_array_flush();
 	ice_video_stream_flush();
@@ -379,14 +389,20 @@ void ice_video_deinit() {
 	}
 
 	if (framebuffer!=NULL) {
+		ice_log((ice_char *)"Freeing framebuffer");
+
 		ZB_close(framebuffer);
 		glClose();
 	}
 
+	ice_log((ice_char *)"Reverting video mode");
+
 	vesa_mode_set(0x000);
 }
 
-void ice_video_buffer(ice_real tick) {
+void ice_video_update() {
+	//glFlush();
+
 	vesa_buffer(
 		framebuffer->pbuf,
 		(unsigned int)
@@ -394,65 +410,18 @@ void ice_video_buffer(ice_real tick) {
 		screen_height*
 		VIDEO_BYTES
 	);
-	
-	//Update texture streams
-	for (ice_uint i=0; i<MAX_STREAMS; i++) {
-		ice_video_stream *stream=&streams[i];
-		
-		if (
-			stream->plm!=NULL && 
-			plm_get_video_enabled(stream->plm)
-		) {
-			int width     = plm_get_width(stream->plm);
-			int height    = plm_get_height(stream->plm);
-			ice_real time = plm_get_time(stream->plm);
-			
-			plm_frame_t *frame;
-			
-			do {
-				frame=plm_decode_video(stream->plm);
-			} while (
-				frame!=NULL &&
-				(ice_real)plm_get_time(stream->plm)-time<tick
-			);
-			
-			if (frame!=NULL) {
-				plm_frame_to_rgb(
-					frame,
-					stream->buffer,
-					(int)width*3
-				);
-				/*
-				glBindTexture(
-					GL_TEXTURE_2D,
-					textures[stream->texture_id]
-				);
-				glReadPixels(
-					0,
-					0,
-					(GLsizei)width,
-					(GLsizei)height,
-					GL_RGB,
-					GL_UNSIGNED_BYTE,
-					stream->buffer
-				);
-				glBindTexture(GL_TEXTURE_2D,0);
-				*/
-			}
-		}
-	}
 }
 
 void ice_video_clear(
 	ice_uint attribute
 ) {
 	switch(attribute) {
-		case ICE_VIDEO_BUFFER_COLOR:
+		case ICE_VIDEO_CLEAR_COLOR:
 			glClearColor(0,0,0,0);
 			glClear(GL_COLOR_BUFFER_BIT);
 			
 			break;
-		case ICE_VIDEO_BUFFER_DEPTH:
+		case ICE_VIDEO_CLEAR_DEPTH:
 			glClear(GL_DEPTH_BUFFER_BIT);
 	}
 }
@@ -825,7 +794,6 @@ void ice_video_texture_rectangle_draw(
 		0.0
 	);
 	glEnd();
-	glFlush();
 }
 
 void ice_video_texture_triangle_draw(
@@ -920,7 +888,6 @@ void ice_video_texture_triangle_draw(
 		0.0
 	);
 	glEnd();
-	glFlush();
 }
 
 ice_uint ice_video_array_new(
@@ -1259,22 +1226,38 @@ void ice_video_model_draw(
 	} else {
 		glCallList(model_array->list);
 	}
-	
-	glFlush();
 }
 
 ice_uint ice_video_stream_load(
 	ice_uint file_id
 ) {
+	ice_uint          stream_id = 0;
+	ice_video_stream *stream    = NULL;
+
+	for (ice_uint i=0; i<MAX_STREAMS; i++) {
+		if (streams[i].plm==NULL) {
+			stream_id = i;
+			stream    = &streams[i];
+
+			break;
+		}
+	}
+
+	if (stream==NULL) {
+		ice_log((ice_char *)"Exceeded texture streams limit");
+
+		return 0;
+	}
+
 	char filename[32];
 	sprintf(
 		filename,
 		"%u.mpg",
 		(unsigned int)file_id
 	);
-	
+
 	plm_t *plm = plm_create_with_filename(filename);
-	
+
 	if (plm==NULL) {
 		ice_char msg[64];
 		sprintf(
@@ -1283,20 +1266,21 @@ ice_uint ice_video_stream_load(
 			(unsigned int)file_id
 		);
 		ice_log(msg);
-		
+
 		return 0;
 	}
-	
+
 	plm_set_audio_enabled(plm,FALSE);
-	plm_set_video_enabled(plm,FALSE);
-	
+	plm_set_video_enabled(plm,TRUE);
+	plm_set_loop(plm,FALSE);
+
 	ice_uint width  = (ice_uint)plm_get_width(plm);
 	ice_uint height = (ice_uint)plm_get_height(plm);
-	
+
 	uint8_t *buffer = malloc(
 		width*height*3
 	);
-	
+
 	if (buffer==NULL) {
 		ice_log((ice_char *)"Failed to allocate video stream buffer");
 		
@@ -1304,13 +1288,20 @@ ice_uint ice_video_stream_load(
 		
 		return 0;
 	}
-	
+
 	ice_uint texture_id = ice_video_texture_new(
 		width,
 		height,
 		GL_RGB
 	);
-	
+
+	if (texture_id==0) {
+		plm_destroy(plm);
+		free(buffer);
+		
+		return 0;
+	}
+	/*
 	glBindTexture(
 		GL_TEXTURE_2D,
 		textures[texture_id]
@@ -1350,27 +1341,12 @@ ice_uint ice_video_stream_load(
 		GL_TEXTURE_2D,
 		0
 	);
-	
-	if (texture_id==0) {
-		plm_destroy(plm);
-		free(buffer);
-		
-		return 0;
-	}
-	
-	for (ice_uint i=0; i<MAX_STREAMS; i++) {
-		if (streams[i].plm==NULL) {
-			streams[i].plm        = plm;
-			streams[i].buffer     = buffer;
-			streams[i].texture_id = texture_id;
-			
-			return (i<<16)|streams[i].texture_id;
-		}
-	}
-	
-	ice_log((ice_char *)"Exceeded texture streams limit");
-	
-	return 0;
+	*/
+	stream->plm        = plm;
+	stream->buffer     = buffer;
+	stream->texture_id = texture_id;
+
+	return (stream_id<<16)|texture_id;
 }
 
 void ice_video_stream_delete(
@@ -1477,85 +1453,50 @@ void ice_video_stream_position_set(
 	) {
 		return;
 	}
-	
-	ice_video_stream *stream = &streams[stream_id];
-	
-	plm_seek(
-		stream->plm,
-		(double)position,
-		1
-	);
-}
 
-ice_uint ice_video_stream_state_get(
-	ice_uint stream_id
-) {
-	stream_id>>=16;
-	
-	if (
-		stream_id>=MAX_STREAMS ||
-		streams[stream_id].plm==NULL
-	) {
-		return ICE_VIDEO_STREAM_PAUSED;
-	}
-	
 	ice_video_stream *stream = &streams[stream_id];
-	
-	if (plm_get_loop(stream->plm)) {
-		return ICE_VIDEO_STREAM_LOOPING;
-	} else if(plm_get_video_enabled(stream->plm)) {
-		return ICE_VIDEO_STREAM_PLAYING;
-	}
-	
-	return ICE_VIDEO_STREAM_PAUSED;
-}
+	plm_frame_t      *frame  = NULL;
 
-void ice_video_stream_state_set(
-	ice_uint stream_id,
-	ice_uint state
-) {
-	stream_id>>=16;
-	
 	if (
-		stream_id>=MAX_STREAMS ||
-		streams[stream_id].plm==NULL
+		position+0.2<plm_get_time(stream->plm) ||
+		position-0.2>plm_get_time(stream->plm)
 	) {
-		return;
+		frame=plm_seek_frame(stream->plm,position,1);
+	} else {
+		while (plm_get_time(stream->plm)<position) {
+			frame=plm_decode_video(stream->plm);
+			
+			if (frame==NULL) {
+				return;
+			}
+		}
 	}
-	
-	ice_video_stream *stream = &streams[stream_id];
-	
-	switch(state) {
-		case ICE_VIDEO_STREAM_PLAYING:
-			plm_set_video_enabled(
-				stream->plm,
-				TRUE
-			);
-			plm_set_loop(
-				stream->plm,
-				FALSE
-			);
-			
-			break;
-		case ICE_VIDEO_STREAM_LOOPING:
-			plm_set_video_enabled(
-				stream->plm,
-				TRUE
-			);
-			plm_set_loop(
-				stream->plm, 
-				TRUE
-			);
-			
-			break;
-		default:
-			plm_set_video_enabled(
-				stream->plm,
-				FALSE
-			);
-			plm_set_loop(
-				stream->plm,
-				FALSE
-			);
+
+	if (frame!=NULL) {
+		int width  = plm_get_width(stream->plm);
+		int height = plm_get_height(stream->plm);
+
+		plm_frame_to_rgb(
+			frame,
+			stream->buffer,
+			(int)width*3
+		);
+		
+		glBindTexture(
+			GL_TEXTURE_2D,
+			textures[stream->texture_id]
+		);
+		glTexImage2D(
+			GL_TEXTURE_2D,
+			0,
+			0,
+			0,
+			(GLsizei)width,
+			(GLsizei)height,
+			GL_RGB,
+			GL_UNSIGNED_BYTE,
+			stream->buffer
+		);
+		glBindTexture(GL_TEXTURE_2D,0);
 	}
 }

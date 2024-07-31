@@ -1,18 +1,13 @@
 #include "ice.h"
 
-ice_uint ice_video_init(
-	ice_uint width,
-	ice_uint height
-) {
+ice_uint ice_video_init() {
 	return 0;
 }
 
 void ice_video_deinit() {
 }
 
-void ice_video_buffer(
-	ice_real tick
-) {
+void ice_video_update() {
 }
 
 void ice_video_clear(
@@ -192,17 +187,5 @@ ice_real ice_video_stream_position_get(
 void ice_video_stream_position_set(
 	ice_uint stream_id,
 	ice_real position
-) {
-}
-
-ice_uint ice_video_stream_state_get(
-	ice_uint stream_id
-) {
-	return 0;
-}
-
-void ice_video_stream_state_set(
-	ice_uint stream_id,
-	ice_uint state
 ) {
 }

@@ -11,14 +11,15 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
 
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 8192 //Increase this if audio is stuttering
+#define SAMPLE_RATE 22050
 
-#define MAX_SAMPLES 32
-#define MAX_SOURCES 64
+#define MAX_SAMPLES 64
+#define MAX_SOURCES 32
 #define MAX_STREAMS 8
 
-#define TIMER_IRQ 0x08
-#define TIMER_DIV 54   //1193181Hz / 22050Hz
+#define TIMER_INT 0x08
+#define TIMER_DIV (1193180/SAMPLE_RATE)
 
 typedef struct {
 	unsigned char *data;
@@ -27,10 +28,10 @@ typedef struct {
 } audio_sample;
 
 typedef struct {
-	unsigned int  sample_id;
-	unsigned int  position;
-	unsigned char state;
-	unsigned char volume;
+	volatile unsigned int  sample_id;
+	volatile unsigned int  position;
+	volatile unsigned char state;
+	volatile unsigned char volume;
 } audio_source;
 
 typedef struct {
@@ -47,81 +48,23 @@ static audio_sample *samples = NULL;
 static audio_source *sources = NULL;
 static audio_stream *streams = NULL;
 
-volatile unsigned char *speaker_buffer;
-volatile unsigned int   speaker_read;
-         unsigned int   speaker_write;
+static volatile unsigned char *stream_buffer;
+static volatile unsigned int   stream_read;
+static          unsigned int   stream_write;
 
-_go32_dpmi_seginfo old_isr;
-_go32_dpmi_seginfo new_isr;
+static _go32_dpmi_seginfo old_isr;
+static _go32_dpmi_seginfo new_isr;
 
-unsigned int dsp_port; //Creative Sound Blaster
-unsigned int lpt_port; //Covox Speech Thing
-
-void speaker_isr() {
-	if (dsp_port) {
-		outportb(
-			dsp_port+0xC,
-			0x10
-		);
-		outportb(
-			dsp_port+0xC,
-			speaker_buffer[speaker_read]
-		);
-	} else {
-		outportb(
-			lpt_port,
-			speaker_buffer[speaker_read]
-		);
-	}
-
-	speaker_read += 1;
-	speaker_read %= BUFFER_SIZE;
-}
-
-void speaker_isr_init() {
-	_go32_dpmi_lock_code(
-		speaker_isr,
-		(long)speaker_isr_init-(long)speaker_isr
-	);
-
-	_go32_dpmi_lock_data(
-		(void *)&speaker_buffer,
-		(long)sizeof(speaker_buffer)
-	);
-
-	_go32_dpmi_lock_data(
-		(void *)&speaker_read,
-		(long)sizeof(speaker_read)
-	);
-
-	_go32_dpmi_get_protected_mode_interrupt_vector(
-		TIMER_IRQ,
-		&old_isr
-	);
-
-	new_isr.pm_offset   = (int)speaker_isr;
-	new_isr.pm_selector = _go32_my_cs();
-
-	_go32_dpmi_chain_protected_mode_interrupt_vector(
-		TIMER_IRQ,
-		&new_isr
-	);
-}
-
-void speaker_isr_deinit() {
-	_go32_dpmi_set_protected_mode_interrupt_vector(
-		TIMER_IRQ,
-		&old_isr
-	);
-}
+static unsigned int dsp_port; //Creative Sound Blaster
+static unsigned int lpt_port; //Covox Speech Thing
 
 unsigned int dsp_reset() {
 	unsigned int port_offset;
 	unsigned int port;
 
 	for (
-		port_offset=1; 
-		port_offset<9; 
+		port_offset=1;
+		port_offset<9;
 		port_offset++
 	) {
 		port = 0x200+(port_offset<<4);
@@ -132,8 +75,8 @@ unsigned int dsp_reset() {
 		delay(10);
 
 		if (
-			port_offset!=7 && 
-			((inportb(port+0xE)&0x80)==0x80) && 
+			port_offset!=7 &&
+			((inportb(port+0xE)&0x80)==0x80) &&
 			(inportb(port+0xA)==0xAA)
 		) {
 			return port; //DSP was found
@@ -143,88 +86,135 @@ unsigned int dsp_reset() {
 	return 0;
 }
 
-void ice_audio_buffer(ice_real tick) {
-	unsigned int mix_a;
-	unsigned int mix_b;
+void speaker_isr() {
+	unsigned int mix_a = 1;
+	unsigned int mix_b = stream_buffer[stream_read%BUFFER_SIZE];
+
+	stream_buffer[stream_read++%BUFFER_SIZE] = 127;
 
 	audio_sample *sample;
 	audio_source *source;
-	audio_stream *stream;
 
-	while (speaker_write!=speaker_read) {
-		mix_a = 0;
-		mix_b = 0;
+	for (unsigned int i=0; i<MAX_SOURCES; i++) {
+		source = &sources[i];
+		sample = &samples[source->sample_id];
 
-		for (unsigned int i=0; i<MAX_SOURCES; i++) {
-			source = &sources[i];
-			sample = &samples[source->sample_id];
+		if (
+			sample->data!=NULL &&
+			source->state>ICE_AUDIO_STATE_PAUSED
+		) {
+			mix_a ++;
+			mix_b += (unsigned int)sample->data[source->position];
+
+			source->position += 1;
+			source->position %= sample->length;
 
 			if (
-				sample->data!=NULL &&
-				source->state>ICE_AUDIO_STATE_PAUSED
+				source->position==0 &&
+				source->state==ICE_AUDIO_STATE_PLAYING
 			) {
-				mix_a += (unsigned int)sample->data[source->position];
-				mix_b ++;
-
-				source->position += 1;
-				source->position %= sample->length;
-
-				if (
-					source->position==0 &&
-					source->state==ICE_AUDIO_STATE_PLAYING
-				) {
-					source->state=ICE_AUDIO_STATE_PAUSED;
-				}
+				source->state=ICE_AUDIO_STATE_PAUSED;
 			}
 		}
+	}
 
-		speaker_buffer[speaker_write] = (unsigned char)(mix_a/MAX(mix_b,1));
+	if (dsp_port) {
+		outportb(
+			dsp_port+0xC,
+			0x10
+		);
+		outportb(
+			dsp_port+0xC,
+			mix_b/MAX(mix_a,1)
+		);
+	} else {
+		outportb(
+			lpt_port,
+			mix_b/MAX(mix_a,1)
+		);
+	}
+}
 
-		speaker_write += 1;
-		speaker_write %= BUFFER_SIZE;
-	};
+void ice_audio_update() {
+	unsigned int todo = MIN(
+		stream_read-stream_write,
+		BUFFER_SIZE
+	);
+	unsigned int write_start = stream_read-todo;
+
+	if (todo==0) {
+		return;
+	}
+
+	stream_read %= BUFFER_SIZE;
+	stream_write = stream_read;
+
+	audio_stream *stream;
+
+	for (unsigned int s=0; s<MAX_STREAMS; s++) {
+		stream = &streams[s];
+
+		if (stream->state>ICE_AUDIO_STATE_PAUSED) {
+			short decoded[todo*stream->channels];
+			unsigned int samples = stb_vorbis_get_samples_short_interleaved(
+				stream->ogg_stream,
+				stream->channels,
+				decoded,
+				todo*stream->channels
+			);
+
+			stream->position += samples;
+
+			if (samples==0) {
+				stream->position = 0;
+
+				if (stream->state==ICE_AUDIO_STATE_PLAYING) {
+					stream->state=ICE_AUDIO_STATE_PAUSED;
+				} else {
+					stb_vorbis_seek_start(stream->ogg_stream);
+				}
+
+				break;
+			}
+
+			for (unsigned int i=0; i<samples; i++) {
+				unsigned int buffer_index = (write_start+i)%BUFFER_SIZE;
+				unsigned int mix = 0;
+
+				for (unsigned int c=0; c<stream->channels; c++) {
+					mix += decoded[i*stream->channels+c]+32767;
+				}
+
+				mix /= stream->channels;
+				mix /= 256;
+				mix  = (mix+stream_buffer[buffer_index])/2;
+
+				stream_buffer[buffer_index] = mix;
+			}
+		}
+	}
 }
 
 ice_uint ice_audio_init() {
-	//Initialize audio buffer
-	speaker_buffer = calloc(1,BUFFER_SIZE);
-	speaker_read   = 0;
-	speaker_write  = 0;
+	//Allocate audio buffer
+	stream_buffer = malloc(BUFFER_SIZE);
+	stream_read   = 0;
+	stream_write  = 0;
 
-	if (speaker_buffer==NULL) {
-		ice_log((ice_char*)"Failed to allocate audio buffer!");
+	memset(
+		(void*)stream_buffer,
+		127,
+		BUFFER_SIZE
+	);
+
+	if (stream_buffer==NULL) {
+		ice_log((ice_char*)"Failed to allocate stream buffer!");
 
 		return 1;
 	}
 
-	dsp_port = dsp_reset();
-	lpt_port = 0x378;
-
-	if (dsp_port) {
-		ice_char msg[64];
-
-		sprintf(
-			(char *)msg,
-			"Detected Sound Blaster: %X",
-			dsp_port
-		);
-
-		ice_log(msg);
-	} else {
-		ice_log((ice_char*)"Sound Blaster not installed");
-		ice_log((ice_char*)"Defaulting to LPT1");
-	}
-
-	//Initialize speaker interrupt service
-	speaker_isr_init();
-
-	//Set clock divider to 44191Hz
-	outportb(0x43,0x34);
-	outportb(0x40,TIMER_DIV&0xFF);
-	outportb(0x40,TIMER_DIV>>8);
-
 	//Allocate slots
-	ice_log((ice_char*)"Allocating sound slots...");
+	ice_log((ice_char*)"Allocating sound slots");
 
 	samples = calloc(
 		MAX_SAMPLES,
@@ -251,22 +241,78 @@ ice_uint ice_audio_init() {
 		return 1;
 	}
 
+	dsp_port = dsp_reset(); //Detect DSP
+	lpt_port = 0x378;
+
+	if (dsp_port) {
+		outportb(dsp_port+0xC,0xD1); //Turn speaker on
+
+		ice_char msg[64];
+
+		sprintf(
+			(char *)msg,
+			"Detected Sound Blaster: %X",
+			dsp_port
+		);
+
+		ice_log(msg);
+	} else {
+		ice_log((ice_char*)"Sound Blaster not installed");
+		ice_log((ice_char*)"Defaulting to LPT1");
+	}
+
+	ice_log((ice_char *)"Overriding timer interrupt");
+
+	_go32_dpmi_lock_code(
+		speaker_isr,
+		(long)sizeof(speaker_isr)
+	);
+
+	_go32_dpmi_get_protected_mode_interrupt_vector(
+		TIMER_INT,
+		&old_isr
+	);
+
+	new_isr.pm_offset   = (int)(speaker_isr);
+	new_isr.pm_selector = _go32_my_cs();
+
+	_go32_dpmi_chain_protected_mode_interrupt_vector(
+		TIMER_INT,
+		&new_isr
+	);
+
+	//Set PIT clock divider
+	outportb(0x43,0x34);
+	outportb(0x40,TIMER_DIV&0xFF);
+	outportb(0x40,TIMER_DIV>>8);
+
 	return 0;
 }
 
 void ice_audio_deinit() {
-	if (speaker_buffer==NULL) {
-		return;
-	}
-
-	free(speaker_buffer);
-	speaker_buffer=NULL;
+	ice_log((ice_char *)"Restoring timer interrupts");
 
 	outportb(0x43,0x34);
 	outportb(0x40,0);
 	outportb(0x40,0);
 
-	speaker_isr_deinit();
+	_go32_dpmi_set_protected_mode_interrupt_vector(
+		TIMER_INT,
+		&old_isr
+	);
+
+	if (stream_buffer!=NULL) {
+		free((void*)stream_buffer);
+		stream_buffer=NULL;
+	}
+
+	if (dsp_port) {
+		ice_log((ice_char *)"Disabling speaker");
+
+		outportb(dsp_port+0xC,0xD3);
+	}
+
+	ice_log((ice_char *)"Flushing sound slots");
 
 	ice_audio_sample_flush();
 	ice_audio_source_flush();
@@ -285,8 +331,6 @@ void ice_audio_deinit() {
 	if (streams!=NULL) {
 		free(streams);
 		streams=NULL;
-		
-		return;
 	}
 }
 
@@ -351,6 +395,22 @@ ice_uint ice_audio_sample_load(
 	}
 
 	stb_vorbis_info info = stb_vorbis_get_info(stream);
+	
+	if (info.sample_rate!=SAMPLE_RATE) {
+		ice_char msg[64];
+		sprintf(
+			(char *)msg,
+			"Failed to load audio sample: %u\n"
+			"Audio must be %u kHz",
+			file_id,
+			SAMPLE_RATE
+		);
+		ice_log(msg);
+		
+		stb_vorbis_close(stream);
+		
+		return 0;
+	}
 
 	sample->rate   = info.sample_rate;
 	sample->length = stb_vorbis_stream_length_in_samples(stream);
@@ -390,18 +450,16 @@ ice_uint ice_audio_sample_load(
 			i<decoded*info.channels;
 			i+=info.channels
 		) {
-			int pulse=32767;
+			int mix=0;
 
 			//Convert 16 bit stereo down to 8 bit mono
 			for (int j=0; j<info.channels; j++) {
-				pulse += buffer[i+j];
+				mix += buffer[i+j]+32767;
 			}
 
-			pulse /= info.channels;
+			mix /= info.channels;
 
-			sample->data[data_index]=(unsigned char)(pulse/256);
-
-			data_index++;
+			sample->data[data_index++]=(unsigned char)(mix/256);
 		}
 	} while (decoded>0);
 
@@ -534,19 +592,17 @@ ice_real ice_audio_source_position_get(
 		return 0;
 	}
 
-	audio_source *source=&sources[source_id];
-
-	ice_uint sample_id   = source->sample_id;
-	audio_sample *sample = &samples[sample_id];
+	audio_source *source = &sources[source_id];
+	audio_sample *sample = &samples[source->sample_id];
 
 	if (
-		sample_id>=MAX_SAMPLES ||
+		source->sample_id>=MAX_SAMPLES ||
 		sample->data==NULL
 	) {
 		return 0;
 	}
 
-	return (ice_real)sources[source_id].position/sample->rate;
+	return (ice_real)source->position/sample->rate;
 }
 
 void ice_audio_source_position_set(
@@ -560,13 +616,11 @@ void ice_audio_source_position_set(
 		return;
 	}
 
-	audio_source *source=&sources[source_id];
-
-	ice_uint sample_id   = source->sample_id;
-	audio_sample *sample = &samples[sample_id];
+	audio_source *source = &sources[source_id];
+	audio_sample *sample = &samples[source->sample_id];
 
 	if (
-		sample_id>=MAX_SAMPLES ||
+		source->sample_id>=MAX_SAMPLES ||
 		sample->data==NULL
 	) {
 		return;
@@ -705,9 +759,25 @@ ice_uint ice_audio_stream_load(
 	}
 
 	stb_vorbis_info info = stb_vorbis_get_info(ogg_stream);
+	
+	if (info.sample_rate!=SAMPLE_RATE) {
+		ice_char msg[64];
+		sprintf(
+			(char *)msg,
+			"Failed to load audio stream: %u\n"
+			"Audio must be %u kHz",
+			file_id,
+			SAMPLE_RATE
+		);
+		ice_log(msg);
+		
+		stb_vorbis_close(ogg_stream);
+		
+		return 0;
+	}
 
 	stream->ogg_stream = ogg_stream;
-	stream->channels    = info.channels;
+	stream->channels   = info.channels;
 	stream->rate       = info.sample_rate;
 	stream->length     = stb_vorbis_stream_length_in_samples(ogg_stream);
 	stream->position   = 0;
@@ -768,7 +838,7 @@ ice_real ice_audio_stream_position_get(
 
 	audio_stream *stream = &streams[stream_id];
 
-	return 0; //TODO
+	return (ice_real)stream->position/stream->rate;
 }
 
 void ice_audio_stream_position_set(
@@ -784,7 +854,19 @@ void ice_audio_stream_position_set(
 
 	audio_stream *stream = &streams[stream_id];
 
-	//TODO
+	ice_uint stream_position = (ice_uint)(
+		position*(ice_real)stream->rate
+	);
+
+	stream->position=MAX(
+		stream_position,
+		stream->length
+	);
+
+	stb_vorbis_seek(
+		stream->ogg_stream,
+		stream->position
+	);
 }
 
 ice_uint ice_audio_stream_state_get(

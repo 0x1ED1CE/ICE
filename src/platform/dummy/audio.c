@@ -7,9 +7,7 @@ ice_uint ice_audio_init() {
 void ice_audio_deinit() {
 }
 
-void ice_audio_buffer(
-	ice_real tick
-) {
+void ice_audio_update() {
 }
 
 void ice_audio_sample_flush() {

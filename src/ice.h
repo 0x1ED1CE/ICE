@@ -1,7 +1,7 @@
 #ifndef ICE_H
 #define ICE_H
 
-#define ICE_VERSION 12
+#define ICE_VERSION 13
 
 typedef unsigned char ice_char;
 typedef unsigned int  ice_uint;
@@ -39,23 +39,14 @@ ice_real ice_clock_get();
 #define ICE_VIDEO_ARRAY_MODEL_2    0x51
 #define ICE_VIDEO_ARRAY_MODEL_3    0x52
 
-#define ICE_VIDEO_STREAM_PAUSED  0
-#define ICE_VIDEO_STREAM_PLAYING 1
-#define ICE_VIDEO_STREAM_LOOPING 2
+#define ICE_VIDEO_CLEAR_COLOR 0
+#define ICE_VIDEO_CLEAR_DEPTH 1
 
-#define ICE_VIDEO_BUFFER_COLOR 0
-#define ICE_VIDEO_BUFFER_DEPTH 1
-
-ice_uint ice_video_init(
-	ice_uint width,
-	ice_uint height
-);
+ice_uint ice_video_init();
 
 void ice_video_deinit();
 
-void ice_video_buffer(
-	ice_real tick
-);
+void ice_video_update();
 
 void ice_video_clear(
 	ice_uint attribute
@@ -176,6 +167,10 @@ void ice_video_stream_delete(
 	ice_uint stream_id
 );
 
+void ice_video_stream_draw(
+	ice_uint stream_id
+);
+
 ice_real ice_video_stream_length_get(
 	ice_uint stream_id
 );
@@ -197,15 +192,6 @@ void ice_video_stream_position_set(
 	ice_real position
 );
 
-ice_uint ice_video_stream_state_get(
-	ice_uint stream_id
-);
-
-void ice_video_stream_state_set(
-	ice_uint stream_id,
-	ice_uint state
-);
-
 /***********************************[AUDIO]***********************************/
 
 #define ICE_AUDIO_STATE_NONE    0
@@ -217,9 +203,7 @@ ice_uint ice_audio_init();
 
 void ice_audio_deinit();
 
-void ice_audio_buffer(
-	ice_real tick
-);
+void ice_audio_update();
 
 void ice_audio_sample_flush();
 
@@ -322,22 +306,40 @@ void ice_audio_stream_volume_set(
 
 /***********************************[INPUT]***********************************/
 
+#define ICE_INPUT_DEVICE_KEYBOARD 0
+#define ICE_INPUT_DEVICE_MOUSE    1
+#define ICE_INPUT_DEVICE_GAMEPAD  2
+
+#define ICE_INPUT_SENSOR_KEYBOARD_BUTTON 0
+
+#define ICE_INPUT_SENSOR_MOUSE_POSITION_X    0
+#define ICE_INPUT_SENSOR_MOUSE_POSITION_Y    1
+#define ICE_INPUT_SENSOR_MOUSE_LEFT_BUTTON   2
+#define ICE_INPUT_SENSOR_MOUSE_RIGHT_BUTTON  3
+#define ICE_INPUT_SENSOR_MOUSE_MIDDLE_BUTTON 4
+
 ice_uint ice_input_init();
 
 void ice_input_deinit();
 
+void ice_input_update();
+
 ice_char ice_input_poll(
 	ice_uint *device_id,
-	ice_uint *input_id,
-	ice_real *input_state
+	ice_uint *sensor_id,
+	ice_real *sensor_state
 );
 
 ice_real ice_input_get(
 	ice_uint device_id,
-	ice_uint input_id
+	ice_uint sensor_id
 );
 
 /***********************************[CACHE]***********************************/
+
+ice_uint ice_cache_init();
+
+void ice_cache_deinit();
 
 ice_uint ice_cache_slot_open(
 	ice_uint slot_id
@@ -351,8 +353,18 @@ void ice_cache_slot_delete(
 	ice_uint slot_id
 );
 
-ice_uint ice_cache_init();
+void ice_cache_slot_seek(
+	ice_uint slot_id,
+	ice_uint address
+);
 
-void ice_cache_deinit();
+ice_char ice_cache_slot_read(
+	ice_uint slot_id
+);
+
+void ice_cache_slot_write(
+	ice_uint slot_id,
+	ice_char byte
+);
 
 #endif

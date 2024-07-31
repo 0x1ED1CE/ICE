@@ -10,7 +10,7 @@
 
 #define BUFFER_SIZE 2048
 
-#define MAX_SAMPLES 32
+#define MAX_SAMPLES 64
 #define MAX_SOURCES 64
 #define MAX_STREAMS 8
 
@@ -50,13 +50,13 @@ void sdl_audio_buffer(
 ) {
 	unsigned int mix_a;
 	unsigned int mix_b;
-	unsigned int mix_c;
 
 	audio_sample *sample;
 	audio_source *source;
 
 	for (int i=0; i<len; i++) {
-		stream[i]=127;
+		mix_a = 0;
+		mix_b = 0;
 
 		for (int j=0; j<MAX_SOURCES; j++) {
 			source = &sources[j];
@@ -66,11 +66,8 @@ void sdl_audio_buffer(
 				sample->data!=NULL &&
 				source->state>ICE_AUDIO_STATE_PAUSED
 			) {
-				mix_a = (unsigned int)stream[i];
-				mix_b = (unsigned int)sample->data[source->position];
-				mix_c = (mix_a+mix_b)/2;
-
-				stream[i]=(Uint8)mix_c;
+				mix_a += (unsigned int)sample->data[source->position];
+				mix_b ++;
 
 				source->position += 1;
 				source->position %= sample->length;
@@ -83,63 +80,63 @@ void sdl_audio_buffer(
 				}
 			}
 		}
+
+		stream[i]=(Uint8)(mix_a/MAX(mix_b,1));
 	};
 }
 
 ice_uint ice_audio_init() {
-	{ //Initialize SDL audio
-		audio_spec.freq     = 22050;
-		audio_spec.format   = AUDIO_U8;
-		audio_spec.channels = 1;
-		audio_spec.samples  = BUFFER_SIZE;
-		audio_spec.callback = sdl_audio_buffer;
-		audio_spec.userdata = NULL;
+	//Initialize SDL audio
+	audio_spec.freq     = 22050;
+	audio_spec.format   = AUDIO_U8;
+	audio_spec.channels = 1;
+	audio_spec.samples  = BUFFER_SIZE;
+	audio_spec.callback = sdl_audio_buffer;
+	audio_spec.userdata = NULL;
 
-		if (SDL_OpenAudio(
-			&audio_spec,
-			NULL
-		)!=0) {
-			char error_msg[256];
+	if (SDL_OpenAudio(
+		&audio_spec,
+		NULL
+	)!=0) {
+		char error_msg[256];
 
-			sprintf(
-				error_msg,
-				"Failed to initialize audio: %s",
-				SDL_GetError()
-			);
+		sprintf(
+			error_msg,
+			"Failed to initialize audio: %s",
+			SDL_GetError()
+		);
 
-			ice_log((ice_char *)error_msg);
+		ice_log((ice_char *)error_msg);
 
-			return 1;
-		}
-		
-		SDL_PauseAudio(0);
+		return 1;
 	}
+	
+	SDL_PauseAudio(0);
 
-	{ //Allocate slots
-		samples = calloc(
-			MAX_SAMPLES,
-			sizeof(audio_sample)
-		);
+	//Allocate slots
+	samples = calloc(
+		MAX_SAMPLES,
+		sizeof(audio_sample)
+	);
+	
+	sources = calloc(
+		MAX_SOURCES,
+		sizeof(audio_source)
+	);
+	
+	streams = calloc(
+		MAX_STREAMS,
+		sizeof(audio_stream)
+	);
+	
+	if (
+		samples == NULL ||
+		sources == NULL ||
+		streams == NULL
+	) {
+		ice_log((ice_char *)"Failed to allocate audio slots!");
 		
-		sources = calloc(
-			MAX_SOURCES,
-			sizeof(audio_source)
-		);
-		
-		streams = calloc(
-			MAX_STREAMS,
-			sizeof(audio_stream)
-		);
-		
-		if (
-			samples == NULL ||
-			sources == NULL ||
-			streams == NULL
-		) {
-			ice_log((ice_char *)"Failed to allocate audio slots!");
-			
-			return 1;
-		}
+		return 1;
 	}
 
     return 0;
@@ -168,10 +165,7 @@ void ice_audio_deinit() {
 	}
 }
 
-void ice_audio_buffer(
-	ice_real tick
-) {
-}
+void ice_audio_update() {}
 
 void ice_audio_sample_flush() {
 	if (samples!=NULL) {
@@ -281,15 +275,17 @@ ice_uint ice_audio_sample_load(
 			i<decoded*info.channels;
 			i+=info.channels
 		) {
-			int pulse=32767;
-			
-			//Convert stereo down to mono
+			int pulse=0;
+
+			//Convert 16 bit stereo down to 8 bit mono
 			for (int j=0; j<info.channels; j++) {
-				pulse = (pulse+buffer[i+j]+32767)/2;
+				pulse += buffer[i+j]+32767;
 			}
-			
+
+			pulse /= info.channels;
+
 			sample->data[data_index]=(unsigned char)(pulse/256);
-			
+
 			data_index++;
 		}
 	} while (decoded>0);

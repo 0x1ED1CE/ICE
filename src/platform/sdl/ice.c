@@ -46,7 +46,7 @@ int main(
 	if (
 		ice_clock_init() ||
 		ice_audio_init() ||
-		ice_video_init(640,480) ||
+		ice_video_init() ||
 		ice_input_init()
 	) {
 		ice_clock_deinit();
@@ -84,8 +84,9 @@ int main(
 			break;
 		}
 		
-		ice_audio_buffer(frame_time);
-		ice_video_buffer(frame_time);
+		ice_input_update();
+		ice_audio_update();
+		ice_video_update();
 
 		frame_time = ice_clock_get()-frame_start;
 	}
