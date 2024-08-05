@@ -3,7 +3,7 @@
 
 ICE is a 3D game engine for DOS and other platforms.
 
-**NOTE:** This project is still in development and is not suitable for making games yet.
+**This project is still in early development and is not suitable for making games yet.**
 
 <img src="/screenshots/world.png?raw=true">
 
