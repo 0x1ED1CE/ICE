@@ -16,9 +16,14 @@ ICE is a 3D game engine for DOS and other platforms.
 - Supports mouse and keyboard
 
 ## TODO:
-- Scripting support
-- Joystick support
-- SDL2 port
+- Add asynchronous loading
+- Add event handling
+- Redo mouse handling
+- Add scripting support
+- Add ECS middle layer
+- Add physics and animation system
+- Rename
+- Port to SDL2
 - Documentation
 
 ## How to build
