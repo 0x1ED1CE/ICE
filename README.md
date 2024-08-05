@@ -1,7 +1,7 @@
 # ISO/C Engine
 ![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg)
 
-ICE is a 3D game engine for DOS and other platforms.
+ICE is a lite 3D game engine for DOS and other platforms.
 
 **This project is still in early development and is not suitable for making games yet.**
 
