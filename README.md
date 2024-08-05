@@ -5,8 +5,6 @@ ICE is a 3D game engine for DOS and other platforms.
 
 **NOTE:** This project is still in development and is not suitable for making games yet.
 
-## Screenshot
-
 <img src="/screenshots/world.png?raw=true">
 
 ## Features:
@@ -30,7 +28,9 @@ ICE is a 3D game engine for DOS and other platforms.
 Refer to [src/Makefile](src/Makefile) for build instructions
 
 ## How to use
-Refer to [src/ice.h](src/ice.h) for the API
+Refer to [ice.h](src/ice.h) for the API
+
+You can find examples in [demos](src/demos)
 
 ## License
 This software is free to use. You can modify it and redistribute it under the terms of the 
