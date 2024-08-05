@@ -11,7 +11,7 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #define MAX(a,b) ((a)>(b)?(a):(b))
 
-#define BUFFER_SIZE 8192 //Increase this if audio is stuttering
+#define BUFFER_SIZE 4096 //Increase this if audio stream stutters
 #define SAMPLE_RATE 22050
 
 #define MAX_SAMPLES 64
@@ -19,7 +19,7 @@
 #define MAX_STREAMS 8
 
 #define TIMER_INT 0x08
-#define TIMER_DIV (1193180/SAMPLE_RATE)
+#define TIMER_DIV (1193181/SAMPLE_RATE)
 
 typedef struct {
 	unsigned char *data;
@@ -57,6 +57,8 @@ static _go32_dpmi_seginfo new_isr;
 
 static unsigned int dsp_port; //Creative Sound Blaster
 static unsigned int lpt_port; //Covox Speech Thing
+
+extern volatile unsigned long clock_tick;
 
 unsigned int dsp_reset() {
 	unsigned int port_offset;
@@ -133,6 +135,8 @@ void speaker_isr() {
 			mix_b/MAX(mix_a,1)
 		);
 	}
+
+	clock_tick++;
 }
 
 void ice_audio_update() {
@@ -196,7 +200,7 @@ void ice_audio_update() {
 }
 
 ice_uint ice_audio_init() {
-	//Allocate audio buffer
+	//Allocate stream buffer
 	stream_buffer = malloc(BUFFER_SIZE);
 	stream_read   = 0;
 	stream_write  = 0;
@@ -261,7 +265,7 @@ ice_uint ice_audio_init() {
 		ice_log((ice_char*)"Defaulting to LPT1");
 	}
 
-	ice_log((ice_char *)"Overriding timer interrupt");
+	ice_log((ice_char *)"Enabling audio playback");
 
 	_go32_dpmi_lock_code(
 		speaker_isr,
@@ -290,7 +294,7 @@ ice_uint ice_audio_init() {
 }
 
 void ice_audio_deinit() {
-	ice_log((ice_char *)"Restoring timer interrupts");
+	ice_log((ice_char *)"Disabling audio playback");
 
 	outportb(0x43,0x34);
 	outportb(0x40,0);
@@ -301,15 +305,13 @@ void ice_audio_deinit() {
 		&old_isr
 	);
 
+	if (dsp_port) {
+		outportb(dsp_port+0xC,0xD3);
+	}
+
 	if (stream_buffer!=NULL) {
 		free((void*)stream_buffer);
 		stream_buffer=NULL;
-	}
-
-	if (dsp_port) {
-		ice_log((ice_char *)"Disabling speaker");
-
-		outportb(dsp_port+0xC,0xD3);
 	}
 
 	ice_log((ice_char *)"Flushing sound slots");
@@ -395,7 +397,7 @@ ice_uint ice_audio_sample_load(
 	}
 
 	stb_vorbis_info info = stb_vorbis_get_info(stream);
-	
+
 	if (info.sample_rate!=SAMPLE_RATE) {
 		ice_char msg[64];
 		sprintf(
@@ -406,9 +408,9 @@ ice_uint ice_audio_sample_load(
 			SAMPLE_RATE
 		);
 		ice_log(msg);
-		
+
 		stb_vorbis_close(stream);
-		
+
 		return 0;
 	}
 
@@ -770,9 +772,9 @@ ice_uint ice_audio_stream_load(
 			SAMPLE_RATE
 		);
 		ice_log(msg);
-		
+
 		stb_vorbis_close(ogg_stream);
-		
+
 		return 0;
 	}
 
