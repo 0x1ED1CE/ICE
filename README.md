@@ -16,7 +16,7 @@ ICE is a lite 3D game engine for DOS and other platforms.
 ## Architecture
 <img src="/screenshots/architecture.png?raw=true">
 
-ICE will eventually have an ECS middle layer to handle scene compositing, physics and animations. This is of course will be optional and can be entirely bypassed.
+ICE will eventually have an optional ECS middle layer to handle scene compositing, physics and animations.
 
 ## TODO
 - Add asynchronous loading
