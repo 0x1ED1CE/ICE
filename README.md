@@ -26,6 +26,7 @@ ICE will eventually have an ECS middle layer to handle scene compositing, physic
 - Add ECS middle layer
 - Add physics and animation system
 - Rename
+- Add splash screen
 - Port to SDL2
 - Documentation
 
