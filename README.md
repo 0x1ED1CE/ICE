@@ -7,13 +7,18 @@ ICE is a lite 3D game engine for DOS and other platforms.
 
 <img src="/screenshots/world.png?raw=true">
 
-## Features:
+## Features
 - Supports 3dfx Voodoo 3D hardware acceleration and 3D software rendering
 - Supports Creative Sound Blaster and Covox Speech Thing
 - Supports full motion video and audio streaming MPEG1/Ogg
 - Supports mouse and keyboard
 
-## TODO:
+## Architecture
+<img src="/screenshots/architecture.png?raw=true">
+
+ICE will eventually have an ECS middle layer to handle scene compositing, physics and animations. This is of course will be optional and can be entirely bypassed.
+
+## TODO
 - Add asynchronous loading
 - Add event handling
 - Redo mouse handling
