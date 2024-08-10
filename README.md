@@ -13,11 +13,6 @@ ICE is a lite 3D game engine for DOS and other platforms.
 - Supports full motion video and audio streaming MPEG1/Ogg
 - Supports mouse and keyboard
 
-## Architecture
-<img src="/screenshots/architecture.png?raw=true">
-
-ICE will eventually have an optional ECS middle layer to handle scene compositing, physics and animations.
-
 ## TODO
 - Add asynchronous loading
 - Add event handling
@@ -26,8 +21,6 @@ ICE will eventually have an optional ECS middle layer to handle scene compositin
 - Add ECS middle layer
 - Add physics and animation system
 - Rename
-- Add splash screen
-- Port to SDL2
 - Documentation
 
 ## How to build
