@@ -15,17 +15,16 @@ static _go32_dpmi_seginfo old_keyboard_isr;
 static _go32_dpmi_seginfo new_keyboard_isr;
 
 static unsigned int  mouse_status;
-static unsigned int  mouse_position_x;
-static unsigned int  mouse_position_y;
+static signed int    mouse_offset_x;
+static signed int    mouse_offset_y;
 static unsigned char mouse_buttons;
 
 void keyboard_isr() {
 	//Get scancode from keyboard
 	unsigned char scan_code = inportb(0x60);
 
-	if (
-		scan_code!=0xE0 //Ignore extended byte
-	) {
+	//Ignore extended byte
+	if (scan_code!=0xE0) {
 		key_states[scan_code&0x7F]=scan_code>>7;
 	}
 
@@ -73,9 +72,35 @@ ice_uint ice_input_init() {
 		&registers
 	);
 
-	mouse_status = registers.x.ax;
+	mouse_status   = registers.x.ax;
+	mouse_offset_x = 0;
+	mouse_offset_y = 0;
+	mouse_buttons  = 0;
 
-	if (!mouse_status) {
+	if (mouse_status) {
+		//Set sensitivity
+		registers.x.ax = 0x1A;
+		registers.x.bx = 1;
+		registers.x.cx = 1;
+		registers.x.dx = 64;
+
+		int86(
+			MOUSE_INT,
+			&registers,
+			&registers
+		);
+
+		//Set position
+		registers.x.ax = 0x04;
+		registers.x.cx = 16;
+		registers.x.dx = 16;
+
+		int86(
+			MOUSE_INT,
+			&registers,
+			&registers
+		);
+	} else {
 		ice_log((ice_char*)"Mouse not detected!");
 	}
 
@@ -90,8 +115,8 @@ void ice_input_deinit() {
 }
 
 void ice_input_update() {
-	//Get mouse position and button status
 	if (mouse_status) {
+		//Get mouse position and button status
 		union REGS registers={};
 
 		registers.x.ax = 0x03;
@@ -102,9 +127,20 @@ void ice_input_update() {
 			&registers
 		);
 
-		mouse_position_x = registers.x.cx;
-		mouse_position_y = registers.x.dx;
-		mouse_buttons    = registers.x.bx;
+		mouse_offset_x += registers.x.cx-16;
+		mouse_offset_y += registers.x.dx-16;
+		mouse_buttons   = registers.x.bx;
+
+		//Set mouse position back to origin
+		registers.x.ax = 0x04;
+		registers.x.cx = 16;
+		registers.x.dx = 16;
+
+		int86(
+			MOUSE_INT,
+			&registers,
+			&registers
+		);
 	}
 }
 
@@ -126,6 +162,8 @@ ice_real ice_input_get(
 	ice_uint device_id,
 	ice_uint sensor_id
 ) {
+	ice_real temp;
+
 	switch(device_id) {
 		case ICE_INPUT_DEVICE_KEYBOARD:
 			if (sensor_id<MAX_KEYS) {
@@ -135,10 +173,16 @@ ice_real ice_input_get(
 			break;
 		case ICE_INPUT_DEVICE_MOUSE:
 			switch(sensor_id) {
-				case ICE_INPUT_SENSOR_MOUSE_POSITION_X:
-					return (ice_real)mouse_position_x;
-				case ICE_INPUT_SENSOR_MOUSE_POSITION_Y:
-					return (ice_real)mouse_position_y;
+				case ICE_INPUT_SENSOR_MOUSE_OFFSET_X:
+					temp = (ice_real)mouse_offset_x;
+					mouse_offset_x = 0;
+
+					return temp;
+				case ICE_INPUT_SENSOR_MOUSE_OFFSET_Y:
+					temp = (ice_real)mouse_offset_y;
+					mouse_offset_y = 0;
+
+					return temp;
 				case ICE_INPUT_SENSOR_MOUSE_LEFT_BUTTON:
 					return (ice_real)(mouse_buttons&1);
 				case ICE_INPUT_SENSOR_MOUSE_RIGHT_BUTTON:

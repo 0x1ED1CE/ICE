@@ -1,28 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-//#include <bios.h>
 
 #include "ice.h"
-
-#define DEBUG_PORT 0
 
 void ice_log(
 	ice_char *message
 ) {
-	/*
-	for (
-		ice_uint i=0;
-		message[i];
-		i++
-	) {
-		_bios_serialcom(
-			_COM_SEND,
-			DEBUG_PORT,
-			(unsigned)message[i]
-		);
-	}
-	*/
-
 	FILE *log = fopen("log.txt","a");
 
 	if (log==NULL) {
@@ -40,17 +23,6 @@ void ice_log(
 }
 
 int main() {
-	/*
-	_bios_serialcom(
-		_COM_INIT,
-		DEBUG_PORT,
-		_COM_9600|
-		_COM_NOPARITY|
-		_COM_STOP1|
-		_COM_CHR8
-	);
-	*/
-
 	if (
 		ice_clock_init() ||
 		ice_audio_init() ||
@@ -76,14 +48,16 @@ int main() {
 		frame_start = ice_clock_get();
 
 		ice_input_update();
-		ice_audio_update();
 		ice_video_update();
+		ice_audio_update();
 
 		if (ice_update(frame_time)) {
 			break;
 		}
 
-		frame_time = ice_clock_get()-frame_start;
+		do {
+			frame_time=ice_clock_get()-frame_start;
+		} while (frame_time<0.016667f);
 	}
 
 	ice_deinit();

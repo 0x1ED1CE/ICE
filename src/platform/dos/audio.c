@@ -140,11 +140,12 @@ void speaker_isr() {
 }
 
 void ice_audio_update() {
-	unsigned int todo = MIN(
+	unsigned int todo=MIN(
 		stream_read-stream_write,
 		BUFFER_SIZE
 	);
-	unsigned int write_start = stream_read-todo;
+
+	unsigned int write_start=stream_read-todo;
 
 	if (todo==0) {
 		return;
@@ -201,6 +202,8 @@ void ice_audio_update() {
 
 ice_uint ice_audio_init() {
 	//Allocate stream buffer
+	ice_log((ice_char*)"Allocating stream buffer");
+
 	stream_buffer = malloc(BUFFER_SIZE);
 	stream_read   = 0;
 	stream_write  = 0;
@@ -348,8 +351,6 @@ ice_uint ice_audio_sample_load(
 	ice_uint file_id
 ) {
 	if (samples==NULL) {
-		ice_log((ice_char *)"Audio is not initialized!");
-
 		return 0;
 	}
 
