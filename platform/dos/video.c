@@ -1,1 +1,0 @@
-#include "mesa.h" //Replace with mesa.h to use 3dfx voodoo instead
