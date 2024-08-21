@@ -58,11 +58,11 @@ static ice_video_model   *models   = NULL;
 static uint8_t *stream_buffer;
 
 ice_uint ice_video_init() {
-	screen_width  = 640;
-	screen_height = 480;
-
 	// Initialize OpenGL
 	ice_log((ice_char *)"Initializing OpenGL");
+
+	screen_width  = 640;
+	screen_height = 480;
 
 	visual = DMesaCreateVisual(
 		screen_width,  // X res
@@ -105,6 +105,24 @@ ice_uint ice_video_init() {
 
 	current_buffer = 0;
 
+	glEnable(GL_TEXTURE_2D);
+	glCullFace(GL_BACK);
+	glClearColor(0,0,0,0);
+	glClear(
+		GL_COLOR_BUFFER_BIT|
+		GL_DEPTH_BUFFER_BIT
+	);
+	glTexGeni(
+		GL_S,
+		GL_TEXTURE_GEN_MODE,
+		GL_SPHERE_MAP
+	);
+	glTexGeni(
+		GL_T,
+		GL_TEXTURE_GEN_MODE,
+		GL_SPHERE_MAP
+	);
+
 	// Allocate slots
 	ice_log((ice_char *)"Allocating graphics slots");
 
@@ -141,25 +159,6 @@ ice_uint ice_video_init() {
 
 		return 1;
 	}
-
-	// Setup default OpenGL states
-	glEnable(GL_TEXTURE_2D);
-	glCullFace(GL_BACK);
-	glClearColor(0,0,0,0);
-	glClear(
-		GL_COLOR_BUFFER_BIT|
-		GL_DEPTH_BUFFER_BIT
-	);
-	glTexGeni(
-		GL_S,
-		GL_TEXTURE_GEN_MODE,
-		GL_SPHERE_MAP
-	);
-	glTexGeni(
-		GL_T,
-		GL_TEXTURE_GEN_MODE,
-		GL_SPHERE_MAP
-	);
 
 	// Generate default checkerboard texture
 	unsigned char *temp_data = malloc(8*8*3);
@@ -1247,7 +1246,6 @@ void ice_video_model_draw(
 	glDisable(GL_TEXTURE_GEN_T);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_COLOR_MATERIAL);
-
 	glPolygonMode(
 		GL_FRONT_AND_BACK,
 		GL_FILL
