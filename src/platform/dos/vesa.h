@@ -73,8 +73,6 @@ VESA Super VGA Standard VS911022-8
 #define MAX_ARRAYS   256
 #define MAX_MODELS   128
 
-#define STREAM_BUFFER_SIZE (256*256*3)
-
 typedef struct { 
 	unsigned char  VESASignature[4]    __attribute__ ((packed));
 	unsigned short VESAVersion         __attribute__ ((packed));
@@ -155,13 +153,11 @@ static ice_video_texture *textures    = NULL;
 static ice_video_array   *arrays      = NULL;
 static ice_video_model   *models      = NULL;
 
-static uint8_t *stream_buffer;
-
 int vesa_info_get() {
 	__dpmi_regs r;
 	unsigned long dosbuf;
 	unsigned int c;
-	
+
 	dosbuf=__tb&0xFFFFF;
 
 	for (c=0; c<sizeof(VESA_INFO); c++) {
@@ -232,21 +228,21 @@ int vesa_mode_set(
 	unsigned int mode_number
 ) {
 	__dpmi_regs r;
-	
+
 	if (!mode_number) { //Return to text mode
 		union REGS regs = {};
 		regs.h.al       = 0x3;
 		int86(0x10,&regs,&regs);
-		
+
 		//clrscr();
-		
+
 		return 0;
 	}
 
 	r.x.ax = 0x4F02;
 	r.x.bx = mode_number;
 	__dpmi_int(0x10,&r);
-	
+
 	if (r.h.ah)
 		return -1;
 
@@ -320,7 +316,7 @@ ice_uint ice_video_init() {
 
 	if (framebuffer==NULL) {
 		ice_log((ice_char *)"Failed to allocate framebuffer!");
-		
+
 		return 1;
 	}
 
@@ -338,7 +334,7 @@ ice_uint ice_video_init() {
 			VIDEO_MODE
 		);
 		ice_log(msg);
-		
+
 		return 1;
 	}
 
@@ -347,7 +343,7 @@ ice_uint ice_video_init() {
 
 	textures = calloc(
 		MAX_TEXTURES,
-		sizeof(GLuint)
+		sizeof(ice_video_texture)
 	);
 
 	arrays = calloc(
@@ -366,15 +362,6 @@ ice_uint ice_video_init() {
 		models   == NULL
 	) {
 		ice_log((ice_char *)"Failed to allocate graphics slots!");
-
-		return 1;
-	}
-
-	// Allocate stream buffer
-	stream_buffer = malloc(STREAM_BUFFER_SIZE);
-
-	if (stream_buffer==NULL) {
-		ice_log((ice_char *)"Failed to allocate stream buffer!");
 
 		return 1;
 	}
@@ -488,11 +475,6 @@ void ice_video_deinit() {
 		glClose();
 	}
 
-	if (stream_buffer!=NULL) {
-		free(stream_buffer);
-		stream_buffer=NULL;
-	}
-
 	ice_log((ice_char *)"Reverting video mode");
 
 	vesa_mode_set(0x000);
@@ -523,7 +505,7 @@ void ice_video_clear(
 		case ICE_VIDEO_CLEAR_COLOR:
 			glClearColor(0,0,0,0);
 			glClear(GL_COLOR_BUFFER_BIT);
-			
+
 			break;
 		case ICE_VIDEO_CLEAR_DEPTH:
 			glClear(GL_DEPTH_BUFFER_BIT);
@@ -711,7 +693,7 @@ void ice_video_texture_delete(
 	ice_video_texture *texture = &textures[texture_id];
 
 	if (texture->gl_texture_id!=0) {
-		glBindTexture(GL_TEXTURE_2D,0); // Make sure we aren't binded to it
+		glBindTexture(GL_TEXTURE_2D,0);
 		glDeleteTextures(
 			1,
 			&texture->gl_texture_id
@@ -780,9 +762,9 @@ ice_uint ice_video_texture_height_get(
 	) {
 		return 0;
 	}
-	
+
 	GLint height = 0;
-	
+
 	/*
 	glGetTexLevelParameteriv(
 		GL_TEXTURE_2D,
@@ -791,7 +773,7 @@ ice_uint ice_video_texture_height_get(
 		&height
 	);
 	*/
-	
+
 	return (ice_uint)height;
 }
 
@@ -867,28 +849,20 @@ void ice_video_texture_position_set(
 		int width  = plm_get_width(plm);
 		int height = plm_get_height(plm);
 
+		GLint texture_width;
+		GLint texture_height;
+
+		unsigned char *texture = glGetTexturePixmap(
+			gl_texture_id,
+			0,
+			&texture_width,
+			&texture_height
+		);
 		plm_frame_to_rgb(
 			frame,
-			stream_buffer,
+			texture,
 			(int)width*3
 		);
-		/*
-		glBindTexture(
-			GL_TEXTURE_2D,
-			gl_texture_id
-		);
-		glTexSubImage2D(
-			GL_TEXTURE_2D,
-			0,
-			0,
-			0,
-			(GLsizei)width,
-			(GLsizei)height,
-			GL_RGB,
-			GL_UNSIGNED_BYTE,
-			stream_buffer
-		);
-		*/
 	}
 }
 
@@ -911,7 +885,7 @@ void ice_video_texture_rectangle_draw(
 		texture_id>MAX_TEXTURES ||
 		textures[texture_id].gl_texture_id==0
 	)?0:texture_id;
-	
+
 	glEnable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
@@ -1014,7 +988,7 @@ void ice_video_texture_triangle_draw(
 		texture_id>MAX_TEXTURES ||
 		textures[texture_id].gl_texture_id==0
 	)?0:texture_id;
-	
+
 	glEnable(GL_BLEND);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
@@ -1249,7 +1223,7 @@ ice_uint ice_video_model_load(
 		"%u.mat",
 		(unsigned int)asset_id
 	);
-	
+
 	mat_mesh *mesh=mat_mesh_load(filename,mesh_id);
 	// mat_mesh_normalize(mesh);
 
@@ -1257,8 +1231,7 @@ ice_uint ice_video_model_load(
 		mesh==NULL ||
 		mesh->vert_data==NULL ||
 		mesh->norm_data==NULL ||
-		mesh->text_data==NULL ||
-		mesh->face_data==NULL
+		mesh->text_data==NULL
 	) {
 		ice_char msg[128];
 
@@ -1288,19 +1261,25 @@ ice_uint ice_video_model_load(
 		);
 		glBegin(GL_TRIANGLES);
 
-		for (ice_uint f=0; f<mesh->face_size; f+=3) {
-			ice_uint v = MIN(mesh->face_data[f]*3,mesh->vert_size-3);
-			ice_uint n = MIN(mesh->face_data[f+1]*3,mesh->norm_size-3);
-			ice_uint t = MIN(mesh->face_data[f+2]*2,mesh->text_size-2);
+		for (ice_uint i=0; i<mesh->vert_size/3; i++) {
+			ice_uint v = i*3;
+			ice_uint t = i*2;
 
 			glTexCoord2f(
 				(GLfloat)mesh->text_data[t],
 				(GLfloat)mesh->text_data[t+1]
 			);
+			if (mesh->tint_data!=NULL) {
+				glNormal3f(
+					(GLfloat)mesh->tint_data[v],
+					(GLfloat)mesh->tint_data[v+1],
+					(GLfloat)mesh->tint_data[v+2]
+				);
+			}
 			glNormal3f(
-				(GLfloat)mesh->norm_data[n],
-				(GLfloat)mesh->norm_data[n+1],
-				(GLfloat)mesh->norm_data[n+2]
+				(GLfloat)mesh->norm_data[v],
+				(GLfloat)mesh->norm_data[v+1],
+				(GLfloat)mesh->norm_data[v+2]
 			);
 			glVertex3f(
 				(GLfloat)mesh->vert_data[v],
@@ -1395,11 +1374,10 @@ void ice_video_model_draw(
 			glEnable(GL_LIGHTING);
 			glEnable(GL_LIGHT0);
 			glEnable(GL_COLOR_MATERIAL);
+			glSetEnableSpecular(GL_TRUE);
 
 			break;
 		case ICE_VIDEO_EFFECT_REFLECT:
-			glEnable(GL_TEXTURE_GEN_S);
-			glEnable(GL_TEXTURE_GEN_T);
 
 			break;
 		case ICE_VIDEO_EFFECT_LATTICE:
@@ -1424,12 +1402,20 @@ void ice_video_model_draw(
 		texture->gl_texture_id
 	);
 
-	glColor4f(
+	glColor3f(
 		(GLfloat)c_r,
 		(GLfloat)c_g,
-		(GLfloat)c_b,
-		(GLfloat)c_a
+		(GLfloat)c_b
 	);
+
+	GLubyte gl_stipple[128];
+
+	if (c_a<1) {
+		// TODO
+
+		glEnable(GL_POLYGON_STIPPLE);
+		glPolygonStipple(gl_stipple);
+	}
 
 	if (model->gl_display_id!=0) {
 		glCallList(model->gl_display_id);
@@ -1439,11 +1425,10 @@ void ice_video_model_draw(
 
 		glBegin(GL_TRIANGLES);
 
-		for (ice_uint f=0; f<mesh->face_size; f+=3) {
-			ice_uint v = mesh->face_data[f]*3;
-			ice_uint n = mesh->face_data[f+1]*3;
-			ice_uint t = mesh->face_data[f+2]*2;
-			ice_uint s = mesh->skin_data[mesh->face_data[f]]*16;
+		for (ice_uint i=0; i<mesh->vert_size/3; i++) {
+			ice_uint v = i*3;
+			ice_uint t = i*2;
+			ice_uint s = mesh->skin_data[i]*16;
 
 			GLfloat vx = (GLfloat)mesh->vert_data[v];
 			GLfloat vy = (GLfloat)mesh->vert_data[v+1];
@@ -1454,9 +1439,9 @@ void ice_video_model_draw(
 				(GLfloat)mesh->text_data[t+1]
 			);
 			glNormal3f(
-				(GLfloat)mesh->norm_data[n],
-				(GLfloat)mesh->norm_data[n+1],
-				(GLfloat)mesh->norm_data[n+2]
+				(GLfloat)mesh->norm_data[v],
+				(GLfloat)mesh->norm_data[v+1],
+				(GLfloat)mesh->norm_data[v+2]
 			);
 			glVertex3f(
 				vx*pose_data[s]+vy*pose_data[s+1]+vz*pose_data[s+2]+pose_data[s+3],
@@ -1468,8 +1453,8 @@ void ice_video_model_draw(
 		glEnd();
 	}
 
-	// glDisable(GL_TEXTURE_GEN_S);
-	// glDisable(GL_TEXTURE_GEN_T);
+	glSetEnableSpecular(GL_FALSE);
+	glDisable(GL_POLYGON_STIPPLE);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_COLOR_MATERIAL);
 	glPolygonMode(
