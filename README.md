@@ -20,6 +20,7 @@ ICE is a lite 3D game engine for DOS and other platforms.
 - Add scripting support
 - Add ECS middle layer
 - Add physics and animation system
+- Networking support
 - Rename
 - Documentation
 
