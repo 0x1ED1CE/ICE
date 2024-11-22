@@ -36,6 +36,7 @@ VESA Super VGA Standard VS911022-8
 11Bh     -        1280x1024    16.8M (8:8:8)
 */
 
+#include <conio.h>
 #include <stdio.h>
 #include <math.h>
 #include <stdint.h>
@@ -72,6 +73,8 @@ VESA Super VGA Standard VS911022-8
 #define MAX_TEXTURES 256
 #define MAX_ARRAYS   256
 #define MAX_MODELS   128
+
+#define STREAM_BUFFER_SIZE (256*256*3)
 
 typedef struct { 
 	unsigned char  VESASignature[4]    __attribute__ ((packed));
@@ -128,6 +131,8 @@ typedef struct {
 	ice_uint asset_id;
 	GLuint   gl_texture_id;
 	plm_t   *plm;
+	ice_real width;
+	ice_real height;
 } ice_video_texture;
 
 typedef struct {
@@ -145,13 +150,15 @@ typedef struct {
 VESA_INFO vesa_info;
 MODE_INFO mode_info;
 
-static unsigned int screen_width;
-static unsigned int screen_height;
+static ice_real screen_width;
+static ice_real screen_height;
 
 static ZBuffer           *framebuffer = NULL;
 static ice_video_texture *textures    = NULL;
 static ice_video_array   *arrays      = NULL;
 static ice_video_model   *models      = NULL;
+
+static uint8_t *stream_buffer;
 
 int vesa_info_get() {
 	__dpmi_regs r;
@@ -233,8 +240,6 @@ int vesa_mode_set(
 		union REGS regs = {};
 		regs.h.al       = 0x3;
 		int86(0x10,&regs,&regs);
-
-		//clrscr();
 
 		return 0;
 	}
@@ -366,24 +371,22 @@ ice_uint ice_video_init() {
 		return 1;
 	}
 
-	// Generate default checkerboard texture
-	unsigned char *temp_data = malloc(8*8*3);
+	// Allocate stream buffer
+	ice_log((ice_char *)"Allocating texture stream buffer");
 
-	for (unsigned int y=0; y<8; y++) {
-		for (unsigned int x=0; x<8; x++) {
-			unsigned int i = (y*8+x)*3;
-			unsigned int c = i%6==0;
+	stream_buffer = malloc(STREAM_BUFFER_SIZE);
 
-			if (y%2==0) {
-				temp_data[i]   = c?0:251;
-				temp_data[i+1] = c?0:62;
-				temp_data[i+2] = c?0:249;
-			} else {
-				temp_data[i]   = c?251:0;
-				temp_data[i+1] = c?62:0;
-				temp_data[i+2] = c?249:0;
-			}
-		}
+	if (stream_buffer==NULL) {
+		ice_log((ice_char *)"Failed to allocate stream buffer!");
+
+		return 1;
+	}
+	
+	// Generate default texture
+	unsigned char temp_data[8*8*3];
+
+	for (unsigned int i=0; i<8*8*3; i++) {
+		temp_data[i] = 255;
 	}
 
 	glGenTextures(
@@ -441,8 +444,6 @@ ice_uint ice_video_init() {
 		ice_log(msg);
 	}
 
-	free(temp_data);
-
 	return 0;
 }
 
@@ -468,6 +469,11 @@ void ice_video_deinit() {
 		models=NULL;
 	}
 
+	if (stream_buffer!=NULL) {
+		free(stream_buffer);
+		stream_buffer=NULL;
+	}
+
 	if (framebuffer!=NULL) {
 		ice_log((ice_char *)"Freeing framebuffer");
 
@@ -478,6 +484,8 @@ void ice_video_deinit() {
 	ice_log((ice_char *)"Reverting video mode");
 
 	vesa_mode_set(0x000);
+
+	clrscr();
 }
 
 void ice_video_update() {
@@ -490,26 +498,209 @@ void ice_video_update() {
 	);
 }
 
-ice_uint ice_video_width_get() {
+ice_real ice_video_width_get() {
 	return screen_width;
 }
 
-ice_uint ice_video_height_get() {
+ice_real ice_video_height_get() {
 	return screen_height;
 }
 
 void ice_video_clear(
 	ice_uint attribute
 ) {
-	switch(attribute) {
-		case ICE_VIDEO_CLEAR_COLOR:
-			glClearColor(0,0,0,0);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			break;
-		case ICE_VIDEO_CLEAR_DEPTH:
-			glClear(GL_DEPTH_BUFFER_BIT);
+	if (attribute&ICE_VIDEO_CLEAR_COLOR) {
+		glClearColor(0,0,0,0);
+		glClear(GL_COLOR_BUFFER_BIT);
 	}
+	if (attribute&ICE_VIDEO_CLEAR_DEPTH) {
+		glClear(GL_DEPTH_BUFFER_BIT);
+	}
+}
+
+void ice_video_scissor_set(
+	ice_real ax,
+	ice_real ay,
+	ice_real bx,
+	ice_real by
+) {
+	glViewport(
+		(GLint)(ax*screen_width),
+		(GLint)(ay*screen_height),
+		(GLint)((bx-ax)*screen_width),
+		(GLint)((by-ay)*screen_height)
+	);
+}
+
+void ice_video_rectangle_draw(
+	ice_uint texture_id,
+	ice_real d_ax,
+	ice_real d_ay,
+	ice_real d_bx,
+	ice_real d_by,
+	ice_real s_ax,
+	ice_real s_ay,
+	ice_real s_bx,
+	ice_real s_by,
+	ice_real c_r,
+	ice_real c_g,
+	ice_real c_b,
+	ice_real c_a
+) {
+	texture_id=(
+		texture_id>MAX_TEXTURES ||
+		textures[texture_id].gl_texture_id==0
+	)?0:texture_id;
+
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	/*
+	glBlendFunc(
+		GL_SRC_ALPHA,
+		GL_ONE_MINUS_SRC_ALPHA
+	);
+	*/
+	/*
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_RGB,
+		GL_MODULATE
+	);
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_ALPHA,
+		GL_MODULATE
+	);
+	*/
+	glBindTexture(
+		GL_TEXTURE_2D,
+		textures[texture_id].gl_texture_id
+	);
+	glBegin(GL_QUADS);
+	glColor4f(
+		(GLfloat)c_r,
+		(GLfloat)c_g,
+		(GLfloat)c_b,
+		(GLfloat)c_a
+	);
+	glTexCoord2f(
+		(GLfloat)s_ax,
+		(GLfloat)s_ay
+	);
+	glVertex3f(
+		(GLfloat)d_ax*2.0-1.0,
+		1.0-(GLfloat)d_ay*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_ax,
+		(GLfloat)s_by
+	);
+	glVertex3f(
+		(GLfloat)d_ax*2.0-1.0,
+		1.0-(GLfloat)d_by*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_bx,
+		(GLfloat)s_by
+	);
+	glVertex3f(
+		(GLfloat)d_bx*2.0-1.0,
+		1.0-(GLfloat)d_by*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_bx,
+		(GLfloat)s_ay
+	);
+	glVertex3f(
+		(GLfloat)d_bx*2.0-1.0,
+		1.0-(GLfloat)d_ay*2.0,
+		0.0
+	);
+	glEnd();
+}
+
+void ice_video_triangle_draw(
+	ice_uint texture_id,
+	ice_real d_ax,
+	ice_real d_ay,
+	ice_real d_bx,
+	ice_real d_by,
+	ice_real d_cx,
+	ice_real d_cy,
+	ice_real s_ax,
+	ice_real s_ay,
+	ice_real s_bx,
+	ice_real s_by,
+	ice_real s_cx,
+	ice_real s_cy,
+	ice_real c_r,
+	ice_real c_g,
+	ice_real c_b,
+	ice_real c_a
+) {
+	texture_id=(
+		texture_id>MAX_TEXTURES ||
+		textures[texture_id].gl_texture_id==0
+	)?0:texture_id;
+
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	/*
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_RGB,
+		GL_MODULATE
+	);
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_ALPHA,
+		GL_MODULATE
+	);
+	*/
+	glBindTexture(
+		GL_TEXTURE_2D,
+		textures[texture_id].gl_texture_id
+	);
+	glBegin(GL_TRIANGLES);
+	glColor4f(
+		(GLfloat)c_r,
+		(GLfloat)c_g,
+		(GLfloat)c_b,
+		(GLfloat)c_a
+	);
+	glTexCoord2f(
+		(GLfloat)s_ax,
+		(GLfloat)s_ay
+	);
+	glVertex3f(
+		(GLfloat)d_ax*2.0-1.0, // Convert to cartesian
+		1.0-(GLfloat)d_ay*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_bx,
+		(GLfloat)s_by
+	);
+	glVertex3f(
+		(GLfloat)d_bx*2.0-1.0,
+		1.0-(GLfloat)d_by*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_cx,
+		(GLfloat)s_cy
+	);
+	glVertex3f(
+		(GLfloat)d_cx*2.0-1.0,
+		1.0-(GLfloat)d_cy*2.0,
+		0.0
+	);
+	glEnd();
 }
 
 ice_uint ice_video_texture_load(
@@ -560,7 +751,7 @@ ice_uint ice_video_texture_load(
 
 	sprintf(
 		filename,
-		"%u.png",
+		"assets\\textures\\%u.png",
 		(unsigned int)asset_id
 	);
 
@@ -594,6 +785,24 @@ ice_uint ice_video_texture_load(
 			return 0;
 		}
 
+		if (
+			plm_get_width(plm)!=256 ||
+			plm_get_height(plm)!=256
+		) {
+			ice_char msg[64];
+			sprintf(
+				(char *)msg,
+				"Invalid texture format: %u",
+				(unsigned int)asset_id
+			);
+			ice_log(msg);
+			ice_log((ice_char*)"Animated texture resolution must be 256x256");
+
+			plm_destroy(plm);
+
+			return 0;
+		}
+
 		plm_set_audio_enabled(
 			plm,
 			FALSE
@@ -609,6 +818,7 @@ ice_uint ice_video_texture_load(
 
 		width  = plm_get_width(plm);
 		height = plm_get_height(plm);
+		data   = stream_buffer;
 	}
 
 	// Create OpenGL texture
@@ -676,6 +886,8 @@ ice_uint ice_video_texture_load(
 	texture->asset_id      = asset_id;
 	texture->gl_texture_id = gl_texture_id;
 	texture->plm           = plm;
+	texture->width         = (ice_real)width;
+	texture->height        = (ice_real)height;
 
 	return texture_id;
 }
@@ -707,6 +919,8 @@ void ice_video_texture_delete(
 	texture->asset_id      = 0;
 	texture->gl_texture_id = 0;
 	texture->plm           = NULL;
+	texture->width         = 0;
+	texture->height        = 0;
 }
 
 void ice_video_texture_flush() {
@@ -729,7 +943,7 @@ ice_uint ice_video_texture_asset_id_get(
 	return textures[texture_id].asset_id;
 }
 
-ice_uint ice_video_texture_width_get(
+ice_real ice_video_texture_width_get(
 	ice_uint texture_id
 ) {
 	if (
@@ -739,21 +953,10 @@ ice_uint ice_video_texture_width_get(
 		return 0;
 	}
 
-	GLint width = 0;
-
-	/*
-	glGetTexLevelParameteriv(
-		GL_TEXTURE_2D,
-		0,
-		GL_TEXTURE_WIDTH,
-		&width
-	);
-	*/
-
-	return (ice_uint)width;
+	return textures[texture_id].width;
 }
 
-ice_uint ice_video_texture_height_get(
+ice_real ice_video_texture_height_get(
 	ice_uint texture_id
 ) {
 	if (
@@ -763,18 +966,7 @@ ice_uint ice_video_texture_height_get(
 		return 0;
 	}
 
-	GLint height = 0;
-
-	/*
-	glGetTexLevelParameteriv(
-		GL_TEXTURE_2D,
-		0,
-		GL_TEXTURE_WIDTH,
-		&height
-	);
-	*/
-
-	return (ice_uint)height;
+	return textures[texture_id].height;
 }
 
 ice_real ice_video_texture_length_get(
@@ -790,7 +982,7 @@ ice_real ice_video_texture_length_get(
 	return (ice_real)plm_get_duration(textures[texture_id].plm);
 }
 
-ice_real ice_video_texture_position_get(
+ice_real ice_video_texture_seek_get(
 	ice_uint texture_id
 ) {
 	if (
@@ -803,7 +995,7 @@ ice_real ice_video_texture_position_get(
 	return (ice_real)plm_get_time(textures[texture_id].plm);
 }
 
-void ice_video_texture_position_set(
+void ice_video_texture_seek_set(
 	ice_uint texture_id,
 	ice_real position
 ) {
@@ -852,209 +1044,20 @@ void ice_video_texture_position_set(
 		GLint texture_width;
 		GLint texture_height;
 
+		plm_frame_to_rgb(
+			frame,
+			stream_buffer,
+			width*3
+		);
+
 		unsigned char *texture = glGetTexturePixmap(
 			gl_texture_id,
 			0,
 			&texture_width,
 			&texture_height
 		);
-		plm_frame_to_rgb(
-			frame,
-			texture,
-			(int)width*3
-		);
+		
 	}
-}
-
-void ice_video_texture_rectangle_draw(
-	ice_uint texture_id,
-	ice_real d_ax,
-	ice_real d_ay,
-	ice_real d_bx,
-	ice_real d_by,
-	ice_real s_ax,
-	ice_real s_ay,
-	ice_real s_bx,
-	ice_real s_by,
-	ice_real c_ar,
-	ice_real c_ag,
-	ice_real c_ab,
-	ice_real c_aa
-) {
-	texture_id=(
-		texture_id>MAX_TEXTURES ||
-		textures[texture_id].gl_texture_id==0
-	)?0:texture_id;
-
-	glEnable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	/*
-	glBlendFunc(
-		GL_SRC_ALPHA,
-		GL_ONE_MINUS_SRC_ALPHA
-	);
-	*/
-	/*
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_RGB,
-		GL_MODULATE
-	);
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_ALPHA,
-		GL_MODULATE
-	);
-	*/
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[texture_id].gl_texture_id
-	);
-	glBegin(GL_QUADS);
-	glColor4f(
-		(GLfloat)c_ar,
-		(GLfloat)c_ag,
-		(GLfloat)c_ab,
-		(GLfloat)c_aa
-	);
-	glTexCoord2f(
-		(GLfloat)s_ax,
-		(GLfloat)s_ay
-	);
-	glVertex3f(
-		(GLfloat)d_ax*2.0-1.0,
-		1.0-(GLfloat)d_ay*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_ax,
-		(GLfloat)s_by
-	);
-	glVertex3f(
-		(GLfloat)d_ax*2.0-1.0,
-		1.0-(GLfloat)d_by*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_bx,
-		(GLfloat)s_by
-	);
-	glVertex3f(
-		(GLfloat)d_bx*2.0-1.0,
-		1.0-(GLfloat)d_by*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_bx,
-		(GLfloat)s_ay
-	);
-	glVertex3f(
-		(GLfloat)d_bx*2.0-1.0,
-		1.0-(GLfloat)d_ay*2.0,
-		0.0
-	);
-	glEnd();
-}
-
-void ice_video_texture_triangle_draw(
-	ice_uint texture_id,
-	ice_real d_ax,
-	ice_real d_ay,
-	ice_real d_bx,
-	ice_real d_by,
-	ice_real d_cx,
-	ice_real d_cy,
-	ice_real s_ax,
-	ice_real s_ay,
-	ice_real s_bx,
-	ice_real s_by,
-	ice_real s_cx,
-	ice_real s_cy,
-	ice_real c_ar,
-	ice_real c_ag,
-	ice_real c_ab,
-	ice_real c_aa,
-	ice_real c_br,
-	ice_real c_bg,
-	ice_real c_bb,
-	ice_real c_ba,
-	ice_real c_cr,
-	ice_real c_cg,
-	ice_real c_cb,
-	ice_real c_ca
-) {
-	texture_id=(
-		texture_id>MAX_TEXTURES ||
-		textures[texture_id].gl_texture_id==0
-	)?0:texture_id;
-
-	glEnable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	/*
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_RGB,
-		GL_MODULATE
-	);
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_ALPHA,
-		GL_MODULATE
-	);
-	*/
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[texture_id].gl_texture_id
-	);
-	glBegin(GL_TRIANGLES);
-	glTexCoord2f(
-		(GLfloat)s_ax,
-		(GLfloat)s_ay
-	);
-	glColor4f(
-		(GLfloat)c_ar,
-		(GLfloat)c_ag,
-		(GLfloat)c_ab,
-		(GLfloat)c_aa
-	);
-	glVertex3f(
-		(GLfloat)d_ax*2.0-1.0, // Convert to cartesian
-		1.0-(GLfloat)d_ay*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_bx,
-		(GLfloat)s_by
-	);
-	glColor4f(
-		(GLfloat)c_br,
-		(GLfloat)c_bg,
-		(GLfloat)c_bb,
-		(GLfloat)c_ba
-	);
-	glVertex3f(
-		(GLfloat)d_bx*2.0-1.0,
-		1.0-(GLfloat)d_by*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_cx,
-		(GLfloat)s_cy
-	);
-	glColor4f(
-		(GLfloat)c_cr,
-		(GLfloat)c_cg,
-		(GLfloat)c_cb,
-		(GLfloat)c_ca
-	);
-	glVertex3f(
-		(GLfloat)d_cx*2.0-1.0,
-		1.0-(GLfloat)d_cy*2.0,
-		0.0
-	);
-	glEnd();
 }
 
 ice_uint ice_video_array_new(
@@ -1220,12 +1223,11 @@ ice_uint ice_video_model_load(
 
 	sprintf(
 		filename,
-		"%u.mat",
+		"assets\\models\\%u.mat",
 		(unsigned int)asset_id
 	);
 
 	mat_mesh *mesh=mat_mesh_load(filename,mesh_id);
-	// mat_mesh_normalize(mesh);
 
 	if (
 		mesh==NULL ||
@@ -1253,10 +1255,10 @@ ice_uint ice_video_model_load(
 
 	if (mesh->skin_data==NULL) {
 		// If model is static then compile into display list
-		model->gl_display_id=glGenLists(1);
+		model->gl_display_id=glGenLists(1)+1;
 
 		glNewList(
-			model->gl_display_id,
+			model->gl_display_id-1,
 			GL_COMPILE
 		);
 		glBegin(GL_TRIANGLES);
@@ -1265,17 +1267,15 @@ ice_uint ice_video_model_load(
 			ice_uint v = i*3;
 			ice_uint t = i*2;
 
+			if (mesh->tint_data!=NULL) glColor3f(
+				(GLfloat)mesh->tint_data[v],
+				(GLfloat)mesh->tint_data[v+1],
+				(GLfloat)mesh->tint_data[v+2]
+			);
 			glTexCoord2f(
 				(GLfloat)mesh->text_data[t],
 				(GLfloat)mesh->text_data[t+1]
 			);
-			if (mesh->tint_data!=NULL) {
-				glNormal3f(
-					(GLfloat)mesh->tint_data[v],
-					(GLfloat)mesh->tint_data[v+1],
-					(GLfloat)mesh->tint_data[v+2]
-				);
-			}
 			glNormal3f(
 				(GLfloat)mesh->norm_data[v],
 				(GLfloat)mesh->norm_data[v+1],
@@ -1312,7 +1312,7 @@ void ice_video_model_delete(
 	ice_video_model *model = &models[model_id];
 
 	if (model->gl_display_id!=0) {
-		glDeleteLists(model->gl_display_id,1);
+		glDeleteLists(model->gl_display_id-1,1);
 	}
 
 	if (model->mesh!=NULL) {
@@ -1337,9 +1337,11 @@ void ice_video_model_flush() {
 
 void ice_video_model_draw(
 	ice_uint model_id,
-	ice_uint pose_id,
-	ice_uint projection_id,
 	ice_uint texture_id,
+	ice_uint pose_matrix_id,
+	ice_uint modelview_matrix_id,
+	ice_uint projection_matrix_id,
+	ice_uint texture_matrix_id,
 	ice_uint effect,
 	ice_real c_r,
 	ice_real c_g,
@@ -1349,79 +1351,87 @@ void ice_video_model_draw(
 	if (
 		model_id>MAX_MODELS ||
 		models[model_id].asset_id==0
-	) {
-		return;
-	}
-
-	if (
-		projection_id>MAX_ARRAYS ||
-		arrays[projection_id].data==NULL
-	) {
-		return;
-	}
+	) return;
 
 	texture_id=(
 		texture_id>MAX_TEXTURES ||
 		textures[texture_id].gl_texture_id==0
 	)?0:texture_id;
 
-	ice_video_model   *model      = &models[model_id];
-	ice_video_array   *projection = &arrays[projection_id];
-	ice_video_texture *texture    = &textures[texture_id];
-
-	switch(effect) {
-		case ICE_VIDEO_EFFECT_AMBIENT:
-			glEnable(GL_LIGHTING);
-			glEnable(GL_LIGHT0);
-			glEnable(GL_COLOR_MATERIAL);
-			glSetEnableSpecular(GL_TRUE);
-
-			break;
-		case ICE_VIDEO_EFFECT_REFLECT:
-
-			break;
-		case ICE_VIDEO_EFFECT_LATTICE:
-			glDisable(GL_CULL_FACE);
-			glPolygonMode(
-				GL_FRONT_AND_BACK,
-				GL_LINE
-			);
-
-			break;
-		default:
-			glEnable(GL_CULL_FACE);
-	}
+	ice_video_model *model = &models[model_id];
 
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
-	// glEnable(GL_ALPHA_TEST);
-	// glAlphaFunc(GL_EQUAL,1.0);
-	glLoadMatrixf(projection->data);
+
+	if (effect&ICE_VIDEO_EFFECT_CULLING) {
+		glEnable(GL_CULL_FACE);
+	} else {
+		glDisable(GL_CULL_FACE);
+	}
+
+	if (effect&ICE_VIDEO_EFFECT_LATTICE) {
+		glPolygonMode(
+			GL_FRONT_AND_BACK,
+			GL_LINE
+		);
+	}
+
+	if (effect&ICE_VIDEO_EFFECT_AMBIENT) {
+		glEnable(GL_LIGHTING);
+		glEnable(GL_LIGHT0);
+		glEnable(GL_COLOR_MATERIAL);
+	}
+
+	if (effect&ICE_VIDEO_EFFECT_REFLECT) {
+		// TODO
+	}
+
+	if (
+		texture_matrix_id<MAX_ARRAYS &&
+		arrays[texture_matrix_id].data!=NULL
+	) {
+		glMatrixMode(GL_TEXTURE);
+		glLoadMatrixf(arrays[texture_matrix_id].data);
+	}
+
+	if (
+		modelview_matrix_id<MAX_ARRAYS &&
+		arrays[modelview_matrix_id].data!=NULL
+	) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadMatrixf(arrays[modelview_matrix_id].data);
+	}
+
+	if (
+		projection_matrix_id<MAX_ARRAYS &&
+		arrays[projection_matrix_id].data!=NULL
+	) {
+		glMatrixMode(GL_PROJECTION);
+		glLoadMatrixf(arrays[projection_matrix_id].data);
+	}
+
 	glBindTexture(
 		GL_TEXTURE_2D,
-		texture->gl_texture_id
+		textures[texture_id].gl_texture_id
 	);
 
-	glColor3f(
+	glColor4f(
 		(GLfloat)c_r,
 		(GLfloat)c_g,
-		(GLfloat)c_b
+		(GLfloat)c_b,
+		(GLfloat)c_a
 	);
-
-	GLubyte gl_stipple[128];
 
 	if (c_a<1) {
 		// TODO
 
-		glEnable(GL_POLYGON_STIPPLE);
-		glPolygonStipple(gl_stipple);
 	}
 
 	if (model->gl_display_id!=0) {
-		glCallList(model->gl_display_id);
+		glCallList(model->gl_display_id-1);
 	} else if (model->mesh!=NULL) {
 		mat_mesh *mesh      = model->mesh;
-		GLfloat  *pose_data = arrays[pose_id].data;
+		GLfloat  *pose_data = arrays[pose_matrix_id].data;
 
 		glBegin(GL_TRIANGLES);
 
@@ -1434,6 +1444,11 @@ void ice_video_model_draw(
 			GLfloat vy = (GLfloat)mesh->vert_data[v+1];
 			GLfloat vz = (GLfloat)mesh->vert_data[v+2];
 
+			if (mesh->tint_data!=NULL) glColor3f(
+				(GLfloat)mesh->tint_data[v],
+				(GLfloat)mesh->tint_data[v+1],
+				(GLfloat)mesh->tint_data[v+2]
+			);
 			glTexCoord2f(
 				(GLfloat)mesh->text_data[t],
 				(GLfloat)mesh->text_data[t+1]
@@ -1453,12 +1468,19 @@ void ice_video_model_draw(
 		glEnd();
 	}
 
-	glSetEnableSpecular(GL_FALSE);
-	glDisable(GL_POLYGON_STIPPLE);
 	glDisable(GL_LIGHTING);
 	glDisable(GL_COLOR_MATERIAL);
 	glPolygonMode(
 		GL_FRONT_AND_BACK,
 		GL_FILL
 	);
+
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
 }

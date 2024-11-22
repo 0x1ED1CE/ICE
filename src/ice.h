@@ -2,8 +2,8 @@
 #define ICE_H
 
 #define ICE_VERSION_MAJOR 1
-#define ICE_VERSION_MINOR 4
-#define ICE_VERSION_PATCH 1
+#define ICE_VERSION_MINOR 5
+#define ICE_VERSION_PATCH 2
 
 typedef unsigned char ice_char;
 typedef unsigned int  ice_uint;
@@ -33,12 +33,13 @@ ice_real ice_clock_get();
 /***********************************[VIDEO]***********************************/
 
 #define ICE_VIDEO_EFFECT_DEFAULT 0
-#define ICE_VIDEO_EFFECT_AMBIENT 1
-#define ICE_VIDEO_EFFECT_REFLECT 2
-#define ICE_VIDEO_EFFECT_LATTICE 3
+#define ICE_VIDEO_EFFECT_CULLING 1
+#define ICE_VIDEO_EFFECT_LATTICE 2
+#define ICE_VIDEO_EFFECT_AMBIENT 4
+#define ICE_VIDEO_EFFECT_REFLECT 8
 
-#define ICE_VIDEO_CLEAR_COLOR 0
-#define ICE_VIDEO_CLEAR_DEPTH 1
+#define ICE_VIDEO_CLEAR_COLOR 1
+#define ICE_VIDEO_CLEAR_DEPTH 2
 
 ice_uint ice_video_init();
 
@@ -46,12 +47,55 @@ void ice_video_deinit();
 
 void ice_video_update();
 
-ice_uint ice_video_width_get();
+ice_real ice_video_width_get();
 
-ice_uint ice_video_height_get();
+ice_real ice_video_height_get();
 
 void ice_video_clear(
 	ice_uint attribute
+);
+
+void ice_video_scissor_set(
+	ice_real ax,
+	ice_real ay,
+	ice_real bx,
+	ice_real by
+);
+
+void ice_video_rectangle_draw(
+	ice_uint texture_id,
+	ice_real d_ax,
+	ice_real d_ay,
+	ice_real d_bx,
+	ice_real d_by,
+	ice_real s_ax,
+	ice_real s_ay,
+	ice_real s_bx,
+	ice_real s_by,
+	ice_real c_r,
+	ice_real c_g,
+	ice_real c_b,
+	ice_real c_a
+);
+
+void ice_video_triangle_draw(
+	ice_uint texture_id,
+	ice_real d_ax,
+	ice_real d_ay,
+	ice_real d_bx,
+	ice_real d_by,
+	ice_real d_cx,
+	ice_real d_cy,
+	ice_real s_ax,
+	ice_real s_ay,
+	ice_real s_bx,
+	ice_real s_by,
+	ice_real s_cx,
+	ice_real s_cy,
+	ice_real c_r,
+	ice_real c_g,
+	ice_real c_b,
+	ice_real c_a
 );
 
 ice_uint ice_video_texture_load(
@@ -68,11 +112,11 @@ ice_uint ice_video_texture_asset_id_get(
 	ice_uint texture_id
 );
 
-ice_uint ice_video_texture_width_get(
+ice_real ice_video_texture_width_get(
 	ice_uint texture_id
 );
 
-ice_uint ice_video_texture_height_get(
+ice_real ice_video_texture_height_get(
 	ice_uint texture_id
 );
 
@@ -80,57 +124,13 @@ ice_real ice_video_texture_length_get(
 	ice_uint texture_id
 );
 
-ice_real ice_video_texture_position_get(
+ice_real ice_video_texture_seek_get(
 	ice_uint texture_id
 );
 
-void ice_video_texture_position_set(
+void ice_video_texture_seek_set(
 	ice_uint texture_id,
 	ice_real position
-);
-
-void ice_video_texture_rectangle_draw(
-	ice_uint texture_id,
-	ice_real d_ax,
-	ice_real d_ay,
-	ice_real d_bx,
-	ice_real d_by,
-	ice_real s_ax,
-	ice_real s_ay,
-	ice_real s_bx,
-	ice_real s_by,
-	ice_real c_ar,
-	ice_real c_ag,
-	ice_real c_ab,
-	ice_real c_aa
-);
-
-void ice_video_texture_triangle_draw(
-	ice_uint texture_id,
-	ice_real d_ax,
-	ice_real d_ay,
-	ice_real d_bx,
-	ice_real d_by,
-	ice_real d_cx,
-	ice_real d_cy,
-	ice_real s_ax,
-	ice_real s_ay,
-	ice_real s_bx,
-	ice_real s_by,
-	ice_real s_cx,
-	ice_real s_cy,
-	ice_real c_ar,
-	ice_real c_ag,
-	ice_real c_ab,
-	ice_real c_aa,
-	ice_real c_br,
-	ice_real c_bg,
-	ice_real c_bb,
-	ice_real c_ba,
-	ice_real c_cr,
-	ice_real c_cg,
-	ice_real c_cb,
-	ice_real c_ca
 );
 
 ice_uint ice_video_array_new(
@@ -173,9 +173,11 @@ void ice_video_model_flush();
 
 void ice_video_model_draw(
 	ice_uint model_id,
-	ice_uint pose_id,
-	ice_uint projection_id,
 	ice_uint texture_id,
+	ice_uint pose_matrix_id,
+	ice_uint modelview_matrix_id,
+	ice_uint projection_matrix_id,
+	ice_uint texture_matrix_id,
 	ice_uint effect,
 	ice_real c_r,
 	ice_real c_g,
@@ -196,12 +198,6 @@ void ice_audio_deinit();
 
 void ice_audio_update();
 
-void ice_audio_sample_flush();
-
-void ice_audio_source_flush();
-
-void ice_audio_stream_flush();
-
 ice_uint ice_audio_sample_load(
 	ice_uint file_id
 );
@@ -209,6 +205,8 @@ ice_uint ice_audio_sample_load(
 void ice_audio_sample_delete(
 	ice_uint sample_id
 );
+
+void ice_audio_sample_flush();
 
 ice_real ice_audio_sample_length_get(
 	ice_uint sample_id
@@ -220,6 +218,8 @@ void ice_audio_source_delete(
 	ice_uint source_id
 );
 
+void ice_audio_source_flush();
+
 ice_uint ice_audio_source_sample_get(
 	ice_uint source_id
 );
@@ -229,22 +229,13 @@ void ice_audio_source_sample_set(
 	ice_uint sample_id
 );
 
-ice_real ice_audio_source_position_get(
+ice_real ice_audio_source_seek_get(
 	ice_uint source_Id
 );
 
-void ice_audio_source_position_set(
+void ice_audio_source_seek_set(
 	ice_uint source_id,
 	ice_real position
-);
-
-ice_uint ice_audio_source_state_get(
-	ice_uint source_id
-);
-
-void ice_audio_source_state_set(
-	ice_uint source_id,
-	ice_uint state
 );
 
 ice_real ice_audio_source_volume_get(
@@ -256,6 +247,15 @@ void ice_audio_source_volume_set(
 	ice_real volume
 );
 
+ice_uint ice_audio_source_state_get(
+	ice_uint source_id
+);
+
+void ice_audio_source_state_set(
+	ice_uint source_id,
+	ice_uint state
+);
+
 ice_uint ice_audio_stream_load(
 	ice_uint file_id
 );
@@ -264,26 +264,19 @@ void ice_audio_stream_delete(
 	ice_uint stream_id
 );
 
+void ice_audio_stream_flush();
+
 ice_real ice_audio_stream_length_get(
 	ice_uint stream_id
 );
 
-ice_real ice_audio_stream_position_get(
+ice_real ice_audio_stream_seek_get(
 	ice_uint stream_id
 );
 
-void ice_audio_stream_position_set(
+void ice_audio_stream_seek_set(
 	ice_uint stream_id,
 	ice_real position
-);
-
-ice_uint ice_audio_stream_state_get(
-	ice_uint stream_id
-);
-
-void ice_audio_stream_state_set(
-	ice_uint stream_id,
-	ice_uint state
 );
 
 ice_real ice_audio_stream_volume_get(
@@ -293,6 +286,15 @@ ice_real ice_audio_stream_volume_get(
 void ice_audio_stream_volume_set(
 	ice_uint stream_id,
 	ice_real volume
+);
+
+ice_uint ice_audio_stream_state_get(
+	ice_uint stream_id
+);
+
+void ice_audio_stream_state_set(
+	ice_uint stream_id,
+	ice_uint state
 );
 
 /***********************************[INPUT]***********************************/

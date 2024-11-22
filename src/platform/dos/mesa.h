@@ -1,5 +1,6 @@
 #include "ice.h"
 
+#include <conio.h>
 #include <stdio.h>
 #include <stdint.h>
 
@@ -29,6 +30,8 @@ typedef struct {
 	ice_uint asset_id;
 	GLuint   gl_texture_id;
 	plm_t   *plm;
+	ice_real width;
+	ice_real height;
 } ice_video_texture;
 
 typedef struct {
@@ -43,9 +46,9 @@ typedef struct {
 	mat_mesh *mesh;
 } ice_video_model;
 
-static unsigned int screen_width;
-static unsigned int screen_height;
-static unsigned int current_buffer;
+static ice_real screen_width;
+static ice_real screen_height;
+static ice_uint current_buffer;
 
 static DMesaVisual  visual;
 static DMesaContext context;
@@ -56,6 +59,9 @@ static ice_video_array   *arrays   = NULL;
 static ice_video_model   *models   = NULL;
 
 static uint8_t *stream_buffer;
+
+GLfloat gl_light_position[4] = {1,1,1,0};
+GLfloat gl_light_diffuse[4]  = {1,1,1,1};
 
 ice_uint ice_video_init() {
 	// Initialize OpenGL
@@ -71,7 +77,7 @@ ice_uint ice_video_init() {
 		0,             // refresh rate: 0=default
 		1,             // double-buffered
 		1,             // RGB mode
-		8,             // requested bits/alpha
+		0,             // requested bits/alpha
 		16,            // requested bits/depth
 		0,             // requested bits/stencil
 		0              // requested bits/accum
@@ -86,16 +92,16 @@ ice_uint ice_video_init() {
 		visual,
 		0,            // X pos
 		0,            // Y pos
-		screen_width, // X res
-		screen_height // Y res
+		(GLint)screen_width, // X res
+		(GLint)screen_height // Y res
 	);
 
 	buffers[1] = DMesaCreateBuffer(
 		visual,
 		0,
 		0,
-		screen_width,
-		screen_height
+		(GLint)screen_width,
+		(GLint)screen_height
 	);
 
 	DMesaMakeCurrent(
@@ -122,6 +128,20 @@ ice_uint ice_video_init() {
 		GL_TEXTURE_GEN_MODE,
 		GL_SPHERE_MAP
 	);
+	glLightModeli(
+		GL_LIGHT_MODEL_LOCAL_VIEWER,
+		GL_FALSE
+	);
+	glMaterialfv(
+		GL_FRONT,
+		GL_DIFFUSE,
+		gl_light_diffuse
+	);
+	glLightfv(
+		GL_LIGHT0,
+		GL_POSITION,
+		gl_light_position
+	);
 
 	// Allocate slots
 	ice_log((ice_char *)"Allocating graphics slots");
@@ -135,7 +155,7 @@ ice_uint ice_video_init() {
 		MAX_ARRAYS,
 		sizeof(ice_video_array)
 	);
-	
+
 	models = calloc(
 		MAX_MODELS,
 		sizeof(ice_video_model)
@@ -152,6 +172,8 @@ ice_uint ice_video_init() {
 	}
 
 	// Allocate stream buffer
+	ice_log((ice_char *)"Allocating texture stream buffer");
+
 	stream_buffer = malloc(STREAM_BUFFER_SIZE);
 
 	if (stream_buffer==NULL) {
@@ -159,83 +181,6 @@ ice_uint ice_video_init() {
 
 		return 1;
 	}
-
-	// Generate default checkerboard texture
-	unsigned char *temp_data = malloc(8*8*3);
-
-	for (unsigned int y=0; y<8; y++) {
-		for (unsigned int x=0; x<8; x++) {
-			unsigned int i = (y*8+x)*3;
-			unsigned int c = i%6==0;
-
-			if (y%2==0) {
-				temp_data[i]   = c?0:251;
-				temp_data[i+1] = c?0:62;
-				temp_data[i+2] = c?0:249;
-			} else {
-				temp_data[i]   = c?251:0;
-				temp_data[i+1] = c?62:0;
-				temp_data[i+2] = c?249:0;
-			}
-		}
-	}
-
-	glGenTextures(
-		1,
-		&textures[0].gl_texture_id
-	);
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[0].gl_texture_id
-	);
-	glTexParameteri(
-		GL_TEXTURE_2D,
-		GL_TEXTURE_WRAP_S,
-		GL_REPEAT
-	);
-	glTexParameteri(
-		GL_TEXTURE_2D,
-		GL_TEXTURE_WRAP_T,
-		GL_REPEAT
-	);
-	glTexParameteri(
-		GL_TEXTURE_2D,
-		GL_TEXTURE_MIN_FILTER,
-		GL_NEAREST
-	);
-	glTexParameteri(
-		GL_TEXTURE_2D,
-		GL_TEXTURE_MAG_FILTER,
-		GL_NEAREST
-	);
-	glTexImage2D(
-		GL_TEXTURE_2D,
-		0,
-		GL_RGB,
-		8,
-		8,
-		0,
-		GL_RGB,
-		GL_UNSIGNED_BYTE,
-		temp_data
-	);
-	glBindTexture(GL_TEXTURE_2D,0);
-
-	GLuint gl_error=glGetError();
-
-	if (gl_error) {
-		ice_char msg[128];
-
-		sprintf(
-			(char *)msg,
-			"Failed to create default texture: %u",
-			(unsigned int)gl_error
-		);
-
-		ice_log(msg);
-	}
-
-	free(temp_data);
 
 	return 0;
 }
@@ -267,12 +212,14 @@ void ice_video_deinit() {
 		stream_buffer=NULL;
 	}
 
-	ice_log((ice_char *)"Destroying OpenGL contexts");
+	ice_log((ice_char *)"Cleaning OpenGL contexts");
 
 	DMesaDestroyBuffer(buffers[0]);
 	DMesaDestroyBuffer(buffers[1]);
 	DMesaDestroyContext(context);
 	DMesaDestroyVisual(visual);
+
+	clrscr();
 }
 
 void ice_video_update() {
@@ -285,26 +232,203 @@ void ice_video_update() {
 	DMesaSwapBuffers(buffers[current_buffer]);
 }
 
-ice_uint ice_video_width_get() {
+ice_real ice_video_width_get() {
 	return screen_width;
 }
 
-ice_uint ice_video_height_get() {
+ice_real ice_video_height_get() {
 	return screen_height;
 }
 
 void ice_video_clear(
 	ice_uint attribute
 ) {
-	switch(attribute) {
-		case ICE_VIDEO_CLEAR_COLOR:
-			glClearColor(0,0,0,0);
-			glClear(GL_COLOR_BUFFER_BIT);
-
-			break;
-		case ICE_VIDEO_CLEAR_DEPTH:
-			glClear(GL_DEPTH_BUFFER_BIT);
+	if (attribute&ICE_VIDEO_CLEAR_COLOR) {
+		glClearColor(0,0,0,0);
+		glClear(GL_COLOR_BUFFER_BIT);
 	}
+	if (attribute&ICE_VIDEO_CLEAR_DEPTH) {
+		glClear(GL_DEPTH_BUFFER_BIT);
+	}
+}
+
+void ice_video_scissor_set(
+	ice_real ax,
+	ice_real ay,
+	ice_real bx,
+	ice_real by
+) {
+	glScissor(
+		(GLint)(ax*screen_width),
+		(GLint)(ay*screen_height),
+		(GLint)((bx-ax)*screen_width),
+		(GLint)((by-ay)*screen_height)
+	);
+}
+
+void ice_video_rectangle_draw(
+	ice_uint texture_id,
+	ice_real d_ax,
+	ice_real d_ay,
+	ice_real d_bx,
+	ice_real d_by,
+	ice_real s_ax,
+	ice_real s_ay,
+	ice_real s_bx,
+	ice_real s_by,
+	ice_real c_r,
+	ice_real c_g,
+	ice_real c_b,
+	ice_real c_a
+) {
+	texture_id=(
+		texture_id>MAX_TEXTURES ||
+		textures[texture_id].gl_texture_id==0
+	)?0:texture_id;
+
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glBlendFunc(
+		GL_SRC_ALPHA,
+		GL_ONE_MINUS_SRC_ALPHA
+	);
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_RGB,
+		GL_MODULATE
+	);
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_ALPHA,
+		GL_MODULATE
+	);
+	glBindTexture(
+		GL_TEXTURE_2D,
+		textures[texture_id].gl_texture_id
+	);
+	glBegin(GL_QUADS);
+	glColor4f(
+		(GLfloat)c_r,
+		(GLfloat)c_g,
+		(GLfloat)c_b,
+		(GLfloat)c_a
+	);
+	glTexCoord2f(
+		(GLfloat)s_ax,
+		(GLfloat)s_ay
+	);
+	glVertex3f(
+		(GLfloat)d_ax*2.0-1.0,
+		1.0-(GLfloat)d_ay*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_ax,
+		(GLfloat)s_by
+	);
+	glVertex3f(
+		(GLfloat)d_ax*2.0-1.0,
+		1.0-(GLfloat)d_by*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_bx,
+		(GLfloat)s_by
+	);
+	glVertex3f(
+		(GLfloat)d_bx*2.0-1.0,
+		1.0-(GLfloat)d_by*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_bx,
+		(GLfloat)s_ay
+	);
+	glVertex3f(
+		(GLfloat)d_bx*2.0-1.0,
+		1.0-(GLfloat)d_ay*2.0,
+		0.0
+	);
+	glEnd();
+}
+
+void ice_video_triangle_draw(
+	ice_uint texture_id,
+	ice_real d_ax,
+	ice_real d_ay,
+	ice_real d_bx,
+	ice_real d_by,
+	ice_real d_cx,
+	ice_real d_cy,
+	ice_real s_ax,
+	ice_real s_ay,
+	ice_real s_bx,
+	ice_real s_by,
+	ice_real s_cx,
+	ice_real s_cy,
+	ice_real c_r,
+	ice_real c_g,
+	ice_real c_b,
+	ice_real c_a
+) {
+	texture_id=(
+		texture_id>MAX_TEXTURES ||
+		textures[texture_id].gl_texture_id==0
+	)?0:texture_id;
+
+	glEnable(GL_BLEND);
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_CULL_FACE);
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_RGB,
+		GL_MODULATE
+	);
+	glTexEnvi(
+		GL_TEXTURE_ENV,
+		GL_COMBINE_ALPHA,
+		GL_MODULATE
+	);
+	glBindTexture(
+		GL_TEXTURE_2D,
+		textures[texture_id].gl_texture_id
+	);
+	glBegin(GL_TRIANGLES);
+	glColor4f(
+		(GLfloat)c_r,
+		(GLfloat)c_g,
+		(GLfloat)c_b,
+		(GLfloat)c_a
+	);
+	glTexCoord2f(
+		(GLfloat)s_ax,
+		(GLfloat)s_ay
+	);
+	glVertex3f(
+		(GLfloat)d_ax*2.0-1.0, // Convert to cartesian
+		1.0-(GLfloat)d_ay*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_bx,
+		(GLfloat)s_by
+	);
+	glVertex3f(
+		(GLfloat)d_bx*2.0-1.0,
+		1.0-(GLfloat)d_by*2.0,
+		0.0
+	);
+	glTexCoord2f(
+		(GLfloat)s_cx,
+		(GLfloat)s_cy
+	);
+	glVertex3f(
+		(GLfloat)d_cx*2.0-1.0,
+		1.0-(GLfloat)d_cy*2.0,
+		0.0
+	);
+	glEnd();
 }
 
 ice_uint ice_video_texture_load(
@@ -355,7 +479,7 @@ ice_uint ice_video_texture_load(
 
 	sprintf(
 		filename,
-		"%u.png",
+		"assets\\textures\\%u.png",
 		(unsigned int)asset_id
 	);
 
@@ -371,7 +495,7 @@ ice_uint ice_video_texture_load(
 	if (data==NULL) {
 		sprintf(
 			filename,
-			"%u.mpg",
+			"assets\\textures\\%u.mpg",
 			(unsigned int)asset_id
 		);
 
@@ -385,6 +509,24 @@ ice_uint ice_video_texture_load(
 				(unsigned int)asset_id
 			);
 			ice_log(msg);
+
+			return 0;
+		}
+
+		if (
+			plm_get_width(plm)!=256 ||
+			plm_get_height(plm)!=256
+		) {
+			ice_char msg[64];
+			sprintf(
+				(char *)msg,
+				"Invalid texture format: %u",
+				(unsigned int)asset_id
+			);
+			ice_log(msg);
+			ice_log((ice_char*)"Animated texture resolution must be 256x256");
+
+			plm_destroy(plm);
 
 			return 0;
 		}
@@ -435,7 +577,7 @@ ice_uint ice_video_texture_load(
 	glTexImage2D(
 		GL_TEXTURE_2D,
 		0,
-		(data==NULL)?GL_RGB:GL_RGBA,
+		(data==NULL)?GL_RGB:GL_RGB5_A1,
 		(GLsizei)width,
 		(GLsizei)height,
 		0,
@@ -471,6 +613,8 @@ ice_uint ice_video_texture_load(
 	texture->asset_id      = asset_id;
 	texture->gl_texture_id = gl_texture_id;
 	texture->plm           = plm;
+	texture->width         = (ice_real)width;
+	texture->height        = (ice_real)height;
 
 	return texture_id;
 }
@@ -502,6 +646,8 @@ void ice_video_texture_delete(
 	texture->asset_id      = 0;
 	texture->gl_texture_id = 0;
 	texture->plm           = NULL;
+	texture->width         = 0;
+	texture->height        = 0;
 }
 
 void ice_video_texture_flush() {
@@ -524,7 +670,7 @@ ice_uint ice_video_texture_asset_id_get(
 	return textures[texture_id].asset_id;
 }
 
-ice_uint ice_video_texture_width_get(
+ice_real ice_video_texture_width_get(
 	ice_uint texture_id
 ) {
 	if (
@@ -534,23 +680,10 @@ ice_uint ice_video_texture_width_get(
 		return 0;
 	}
 
-	GLint width;
-
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[texture_id].gl_texture_id
-	);
-	glGetTexLevelParameteriv(
-		GL_TEXTURE_2D,
-		0,
-		GL_TEXTURE_WIDTH,
-		&width
-	);
-
-	return (ice_uint)width;
+	return textures[texture_id].width;
 }
 
-ice_uint ice_video_texture_height_get(
+ice_real ice_video_texture_height_get(
 	ice_uint texture_id
 ) {
 	if (
@@ -560,20 +693,7 @@ ice_uint ice_video_texture_height_get(
 		return 0;
 	}
 
-	GLint height;
-
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[texture_id].gl_texture_id
-	);
-	glGetTexLevelParameteriv(
-		GL_TEXTURE_2D,
-		0,
-		GL_TEXTURE_WIDTH,
-		&height
-	);
-
-	return (ice_uint)height;
+	return textures[texture_id].height;
 }
 
 ice_real ice_video_texture_length_get(
@@ -589,7 +709,7 @@ ice_real ice_video_texture_length_get(
 	return (ice_real)plm_get_duration(textures[texture_id].plm);
 }
 
-ice_real ice_video_texture_position_get(
+ice_real ice_video_texture_seek_get(
 	ice_uint texture_id
 ) {
 	if (
@@ -602,7 +722,7 @@ ice_real ice_video_texture_position_get(
 	return (ice_real)plm_get_time(textures[texture_id].plm);
 }
 
-void ice_video_texture_position_set(
+void ice_video_texture_seek_set(
 	ice_uint texture_id,
 	ice_real position
 ) {
@@ -651,7 +771,7 @@ void ice_video_texture_position_set(
 		plm_frame_to_rgb(
 			frame,
 			stream_buffer,
-			(int)width*3
+			width*3
 		);
 
 		glBindTexture(
@@ -670,191 +790,6 @@ void ice_video_texture_position_set(
 			stream_buffer
 		);
 	}
-}
-
-void ice_video_texture_rectangle_draw(
-	ice_uint texture_id,
-	ice_real d_ax,
-	ice_real d_ay,
-	ice_real d_bx,
-	ice_real d_by,
-	ice_real s_ax,
-	ice_real s_ay,
-	ice_real s_bx,
-	ice_real s_by,
-	ice_real c_ar,
-	ice_real c_ag,
-	ice_real c_ab,
-	ice_real c_aa
-) {
-	texture_id=(
-		texture_id>MAX_TEXTURES ||
-		textures[texture_id].gl_texture_id==0
-	)?0:texture_id;
-
-	glEnable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	glBlendFunc(
-		GL_SRC_ALPHA,
-		GL_ONE_MINUS_SRC_ALPHA
-	);
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_RGB,
-		GL_MODULATE
-	);
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_ALPHA,
-		GL_MODULATE
-	);
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[texture_id].gl_texture_id
-	);
-	glBegin(GL_QUADS);
-	glColor4f(
-		(GLfloat)c_ar,
-		(GLfloat)c_ag,
-		(GLfloat)c_ab,
-		(GLfloat)c_aa
-	);
-	glTexCoord2f(
-		(GLfloat)s_ax,
-		(GLfloat)s_ay
-	);
-	glVertex3f(
-		(GLfloat)d_ax*2.0-1.0,
-		1.0-(GLfloat)d_ay*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_ax,
-		(GLfloat)s_by
-	);
-	glVertex3f(
-		(GLfloat)d_ax*2.0-1.0,
-		1.0-(GLfloat)d_by*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_bx,
-		(GLfloat)s_by
-	);
-	glVertex3f(
-		(GLfloat)d_bx*2.0-1.0,
-		1.0-(GLfloat)d_by*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_bx,
-		(GLfloat)s_ay
-	);
-	glVertex3f(
-		(GLfloat)d_bx*2.0-1.0,
-		1.0-(GLfloat)d_ay*2.0,
-		0.0
-	);
-	glEnd();
-}
-
-void ice_video_texture_triangle_draw(
-	ice_uint texture_id,
-	ice_real d_ax,
-	ice_real d_ay,
-	ice_real d_bx,
-	ice_real d_by,
-	ice_real d_cx,
-	ice_real d_cy,
-	ice_real s_ax,
-	ice_real s_ay,
-	ice_real s_bx,
-	ice_real s_by,
-	ice_real s_cx,
-	ice_real s_cy,
-	ice_real c_ar,
-	ice_real c_ag,
-	ice_real c_ab,
-	ice_real c_aa,
-	ice_real c_br,
-	ice_real c_bg,
-	ice_real c_bb,
-	ice_real c_ba,
-	ice_real c_cr,
-	ice_real c_cg,
-	ice_real c_cb,
-	ice_real c_ca
-) {
-	texture_id=(
-		texture_id>MAX_TEXTURES ||
-		textures[texture_id].gl_texture_id==0
-	)?0:texture_id;
-
-	glEnable(GL_BLEND);
-	glDisable(GL_DEPTH_TEST);
-	glDisable(GL_CULL_FACE);
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_RGB,
-		GL_MODULATE
-	);
-	glTexEnvi(
-		GL_TEXTURE_ENV,
-		GL_COMBINE_ALPHA,
-		GL_MODULATE
-	);
-	glBindTexture(
-		GL_TEXTURE_2D,
-		textures[texture_id].gl_texture_id
-	);
-	glBegin(GL_TRIANGLES);
-	glTexCoord2f(
-		(GLfloat)s_ax,
-		(GLfloat)s_ay
-	);
-	glColor4f(
-		(GLfloat)c_ar,
-		(GLfloat)c_ag,
-		(GLfloat)c_ab,
-		(GLfloat)c_aa
-	);
-	glVertex3f(
-		(GLfloat)d_ax*2.0-1.0, // Convert to cartesian
-		1.0-(GLfloat)d_ay*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_bx,
-		(GLfloat)s_by
-	);
-	glColor4f(
-		(GLfloat)c_br,
-		(GLfloat)c_bg,
-		(GLfloat)c_bb,
-		(GLfloat)c_ba
-	);
-	glVertex3f(
-		(GLfloat)d_bx*2.0-1.0,
-		1.0-(GLfloat)d_by*2.0,
-		0.0
-	);
-	glTexCoord2f(
-		(GLfloat)s_cx,
-		(GLfloat)s_cy
-	);
-	glColor4f(
-		(GLfloat)c_cr,
-		(GLfloat)c_cg,
-		(GLfloat)c_cb,
-		(GLfloat)c_ca
-	);
-	glVertex3f(
-		(GLfloat)d_cx*2.0-1.0,
-		1.0-(GLfloat)d_cy*2.0,
-		0.0
-	);
-	glEnd();
 }
 
 ice_uint ice_video_array_new(
@@ -1020,10 +955,10 @@ ice_uint ice_video_model_load(
 
 	sprintf(
 		filename,
-		"%u.mat",
+		"assets\\models\\%u.mat",
 		(unsigned int)asset_id
 	);
-	
+
 	mat_mesh *mesh=mat_mesh_load(filename,mesh_id);
 	// mat_mesh_normalize(mesh);
 
@@ -1031,8 +966,7 @@ ice_uint ice_video_model_load(
 		mesh==NULL ||
 		mesh->vert_data==NULL ||
 		mesh->norm_data==NULL ||
-		mesh->text_data==NULL ||
-		mesh->face_data==NULL
+		mesh->text_data==NULL
 	) {
 		ice_char msg[128];
 
@@ -1062,19 +996,23 @@ ice_uint ice_video_model_load(
 		);
 		glBegin(GL_TRIANGLES);
 
-		for (ice_uint f=0; f<mesh->face_size; f+=3) {
-			ice_uint v = MIN(mesh->face_data[f]*3,mesh->vert_size-3);
-			ice_uint n = MIN(mesh->face_data[f+1]*3,mesh->norm_size-3);
-			ice_uint t = MIN(mesh->face_data[f+2]*2,mesh->text_size-2);
+		for (ice_uint i=0; i<mesh->vert_size/3; i++) {
+			ice_uint v = i*3;
+			ice_uint t = i*2;
 
+			if (mesh->tint_data!=NULL) glColor3f(
+				(GLfloat)mesh->tint_data[v],
+				(GLfloat)mesh->tint_data[v+1],
+				(GLfloat)mesh->tint_data[v+2]
+			);
 			glTexCoord2f(
 				(GLfloat)mesh->text_data[t],
 				(GLfloat)mesh->text_data[t+1]
 			);
 			glNormal3f(
-				(GLfloat)mesh->norm_data[n],
-				(GLfloat)mesh->norm_data[n+1],
-				(GLfloat)mesh->norm_data[n+2]
+				(GLfloat)mesh->norm_data[v],
+				(GLfloat)mesh->norm_data[v+1],
+				(GLfloat)mesh->norm_data[v+2]
 			);
 			glVertex3f(
 				(GLfloat)mesh->vert_data[v],
@@ -1132,9 +1070,11 @@ void ice_video_model_flush() {
 
 void ice_video_model_draw(
 	ice_uint model_id,
-	ice_uint pose_id,
-	ice_uint projection_id,
 	ice_uint texture_id,
+	ice_uint pose_matrix_id,
+	ice_uint modelview_matrix_id,
+	ice_uint projection_matrix_id,
+	ice_uint texture_matrix_id,
 	ice_uint effect,
 	ice_real c_r,
 	ice_real c_g,
@@ -1144,58 +1084,71 @@ void ice_video_model_draw(
 	if (
 		model_id>MAX_MODELS ||
 		models[model_id].asset_id==0
-	) {
-		return;
-	}
-
-	if (
-		projection_id>MAX_ARRAYS ||
-		arrays[projection_id].data==NULL
-	) {
-		return;
-	}
+	) return;
 
 	texture_id=(
 		texture_id>MAX_TEXTURES ||
 		textures[texture_id].gl_texture_id==0
 	)?0:texture_id;
 
-	ice_video_model   *model      = &models[model_id];
-	ice_video_array   *projection = &arrays[projection_id];
-	ice_video_texture *texture    = &textures[texture_id];
-
-	switch(effect) {
-		case ICE_VIDEO_EFFECT_AMBIENT:
-			glEnable(GL_LIGHTING);
-			glEnable(GL_LIGHT0);
-			glEnable(GL_COLOR_MATERIAL);
-
-			break;
-		case ICE_VIDEO_EFFECT_REFLECT:
-			glEnable(GL_TEXTURE_GEN_S);
-			glEnable(GL_TEXTURE_GEN_T);
-
-			break;
-		case ICE_VIDEO_EFFECT_LATTICE:
-			glDisable(GL_CULL_FACE);
-			glPolygonMode(
-				GL_FRONT_AND_BACK,
-				GL_LINE
-			);
-
-			break;
-		default:
-			glEnable(GL_CULL_FACE);
-	}
+	ice_video_model *model = &models[model_id];
 
 	glDisable(GL_BLEND);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_ALPHA_TEST);
 	glAlphaFunc(GL_EQUAL,1.0);
-	glLoadMatrixf(projection->data);
+
+	if (effect&ICE_VIDEO_EFFECT_CULLING) {
+		glEnable(GL_CULL_FACE);
+	} else {
+		glDisable(GL_CULL_FACE);
+	}
+
+	if (effect&ICE_VIDEO_EFFECT_LATTICE) {
+		glPolygonMode(
+			GL_FRONT_AND_BACK,
+			GL_LINE
+		);
+	}
+
+	if (effect&ICE_VIDEO_EFFECT_AMBIENT) {
+		glEnable(GL_LIGHTING);
+		glEnable(GL_LIGHT0);
+		glEnable(GL_COLOR_MATERIAL);
+	}
+
+	if (effect&ICE_VIDEO_EFFECT_REFLECT) {
+		glEnable(GL_TEXTURE_GEN_S);
+		glEnable(GL_TEXTURE_GEN_T);
+	}
+
+	if (
+		texture_matrix_id<MAX_ARRAYS &&
+		arrays[texture_matrix_id].data!=NULL
+	) {
+		glMatrixMode(GL_TEXTURE);
+		glLoadMatrixf(arrays[texture_matrix_id].data);
+	}
+
+	if (
+		modelview_matrix_id<MAX_ARRAYS &&
+		arrays[modelview_matrix_id].data!=NULL
+	) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadMatrixf(arrays[modelview_matrix_id].data);
+	}
+
+	if (
+		projection_matrix_id<MAX_ARRAYS &&
+		arrays[projection_matrix_id].data!=NULL
+	) {
+		glMatrixMode(GL_PROJECTION);
+		glLoadMatrixf(arrays[projection_matrix_id].data);
+	}
+
 	glBindTexture(
 		GL_TEXTURE_2D,
-		texture->gl_texture_id
+		textures[texture_id].gl_texture_id
 	);
 
 	glColor4f(
@@ -1209,28 +1162,32 @@ void ice_video_model_draw(
 		glCallList(model->gl_display_id);
 	} else if (model->mesh!=NULL) {
 		mat_mesh *mesh      = model->mesh;
-		GLfloat  *pose_data = arrays[pose_id].data;
+		GLfloat  *pose_data = arrays[pose_matrix_id].data;
 
 		glBegin(GL_TRIANGLES);
 
-		for (ice_uint f=0; f<mesh->face_size; f+=3) {
-			ice_uint v = mesh->face_data[f]*3;
-			ice_uint n = mesh->face_data[f+1]*3;
-			ice_uint t = mesh->face_data[f+2]*2;
-			ice_uint s = mesh->skin_data[mesh->face_data[f]]*16;
+		for (ice_uint i=0; i<mesh->vert_size/3; i++) {
+			ice_uint v = i*3;
+			ice_uint t = i*2;
+			ice_uint s = mesh->skin_data[i]*16;
 
 			GLfloat vx = (GLfloat)mesh->vert_data[v];
 			GLfloat vy = (GLfloat)mesh->vert_data[v+1];
 			GLfloat vz = (GLfloat)mesh->vert_data[v+2];
 
+			if (mesh->tint_data!=NULL) glColor3f(
+				(GLfloat)mesh->tint_data[v],
+				(GLfloat)mesh->tint_data[v+1],
+				(GLfloat)mesh->tint_data[v+2]
+			);
 			glTexCoord2f(
 				(GLfloat)mesh->text_data[t],
 				(GLfloat)mesh->text_data[t+1]
 			);
 			glNormal3f(
-				(GLfloat)mesh->norm_data[n],
-				(GLfloat)mesh->norm_data[n+1],
-				(GLfloat)mesh->norm_data[n+2]
+				(GLfloat)mesh->norm_data[v],
+				(GLfloat)mesh->norm_data[v+1],
+				(GLfloat)mesh->norm_data[v+2]
 			);
 			glVertex3f(
 				vx*pose_data[s]+vy*pose_data[s+1]+vz*pose_data[s+2]+pose_data[s+3],
@@ -1250,4 +1207,13 @@ void ice_video_model_draw(
 		GL_FRONT_AND_BACK,
 		GL_FILL
 	);
+
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
 }

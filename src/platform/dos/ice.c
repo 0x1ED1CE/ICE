@@ -3,14 +3,12 @@
 
 #include "ice.h"
 
+static FILE *log;
+
 void ice_log(
 	ice_char *message
 ) {
-	FILE *log = fopen("log.txt","a");
-
-	if (log==NULL) {
-		return;
-	}
+	if (log==NULL) return;
 
 	fprintf(
 		log,
@@ -18,11 +16,11 @@ void ice_log(
 		(unsigned int)ice_clock_get(),
 		(char *)message
 	);
-
-	fclose(log);
 }
 
 int main() {
+	log = fopen("log.txt","w");
+
 	if (
 		ice_clock_init() ||
 		ice_audio_init() ||
@@ -33,6 +31,8 @@ int main() {
 		ice_audio_deinit();
 		ice_video_deinit();
 		ice_input_deinit();
+
+		if (log!=NULL) fclose(log);
 
 		printf("An error occurred. See LOG.TXT for details.\n");
 
@@ -57,7 +57,7 @@ int main() {
 
 		do {
 			frame_time=ice_clock_get()-frame_start;
-		} while (frame_time<0.016667f);
+		} while (frame_time<0.01666f);
 	}
 
 	ice_deinit();
@@ -66,6 +66,8 @@ int main() {
 	ice_audio_deinit();
 	ice_video_deinit();
 	ice_input_deinit();
+
+	if (log!=NULL) fclose(log);
 
 	return 0;
 }

@@ -202,16 +202,13 @@ void ice_audio_update() {
 
 ice_uint ice_audio_init() {
 	//Allocate stream buffer
-	ice_log((ice_char*)"Allocating stream buffer");
+	ice_log((ice_char*)"Allocating audio stream buffer");
 
-	stream_buffer = malloc(BUFFER_SIZE);
 	stream_read   = 0;
 	stream_write  = 0;
-
-	memset(
-		(void*)stream_buffer,
-		127,
-		BUFFER_SIZE
+	stream_buffer = calloc(
+		BUFFER_SIZE,
+		sizeof(unsigned char)
 	);
 
 	if (stream_buffer==NULL) {
@@ -317,7 +314,7 @@ void ice_audio_deinit() {
 		stream_buffer=NULL;
 	}
 
-	ice_log((ice_char *)"Flushing sound slots");
+	ice_log((ice_char *)"Flushing audio slots");
 
 	ice_audio_sample_flush();
 	ice_audio_source_flush();
@@ -336,14 +333,6 @@ void ice_audio_deinit() {
 	if (streams!=NULL) {
 		free(streams);
 		streams=NULL;
-	}
-}
-
-void ice_audio_sample_flush() {
-	if (samples!=NULL) {
-		for (ice_uint i=0; i<MAX_SAMPLES; i++) {
-			ice_audio_sample_delete(i);
-		}
 	}
 }
 
@@ -375,7 +364,7 @@ ice_uint ice_audio_sample_load(
 	char filename[32];
 	sprintf(
 		filename,
-		"%u.ogg",
+		"assets\\sounds\\%u.ogg",
 		(unsigned int)file_id
 	);
 
@@ -491,6 +480,14 @@ void ice_audio_sample_delete(
 	sample->length = 0;
 }
 
+void ice_audio_sample_flush() {
+	if (samples!=NULL) {
+		for (ice_uint i=0; i<MAX_SAMPLES; i++) {
+			ice_audio_sample_delete(i);
+		}
+	}
+}
+
 ice_real ice_audio_sample_length_get(
 	ice_uint sample_id
 ) {
@@ -504,14 +501,6 @@ ice_real ice_audio_sample_length_get(
 	audio_sample *sample=&samples[sample_id];
 
 	return (ice_real)sample->length/sample->rate;
-}
-
-void ice_audio_source_flush() {
-	if (sources!=NULL) {
-		for (ice_uint i=0; i<MAX_SOURCES; i++) {
-			ice_audio_source_delete(i);
-		}
-	}
 }
 
 ice_uint ice_audio_source_new() {
@@ -554,6 +543,14 @@ void ice_audio_source_delete(
 	source->volume    = 255;
 }
 
+void ice_audio_source_flush() {
+	if (sources!=NULL) {
+		for (ice_uint i=0; i<MAX_SOURCES; i++) {
+			ice_audio_source_delete(i);
+		}
+	}
+}
+
 ice_uint ice_audio_source_sample_get(
 	ice_uint source_id
 ) {
@@ -585,7 +582,7 @@ void ice_audio_source_sample_set(
 	source->position  = 0;
 }
 
-ice_real ice_audio_source_position_get(
+ice_real ice_audio_source_seek_get(
 	ice_uint source_id
 ) {
 	if (
@@ -608,7 +605,7 @@ ice_real ice_audio_source_position_get(
 	return (ice_real)source->position/sample->rate;
 }
 
-void ice_audio_source_position_set(
+void ice_audio_source_seek_set(
 	ice_uint source_id,
 	ice_real position
 ) {
@@ -637,6 +634,36 @@ void ice_audio_source_position_set(
 		sample_position,
 		sample->length
 	);
+}
+
+ice_real ice_audio_source_volume_get(
+	ice_uint source_id
+) {
+	if (
+		source_id>=MAX_SOURCES ||
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
+	) {
+		return 0;
+	}
+
+	return (ice_real)sources[source_id].volume/255;
+}
+
+void ice_audio_source_volume_set(
+	ice_uint source_id,
+	ice_real volume
+) {
+	if (
+		source_id>=MAX_SOURCES ||
+		sources[source_id].state==ICE_AUDIO_STATE_NONE
+	) {
+		return;
+	}
+
+	volume = MAX(volume,0);
+	volume = MIN(volume,1);
+
+	sources[source_id].volume=(ice_char)(volume*255);
 }
 
 ice_uint ice_audio_source_state_get(
@@ -677,44 +704,6 @@ void ice_audio_source_state_set(
 	}
 }
 
-ice_real ice_audio_source_volume_get(
-	ice_uint source_id
-) {
-	if (
-		source_id>=MAX_SOURCES ||
-		sources[source_id].state==ICE_AUDIO_STATE_NONE
-	) {
-		return 0;
-	}
-
-	return (ice_real)sources[source_id].volume/255;
-}
-
-void ice_audio_source_volume_set(
-	ice_uint source_id,
-	ice_real volume
-) {
-	if (
-		source_id>=MAX_SOURCES ||
-		sources[source_id].state==ICE_AUDIO_STATE_NONE
-	) {
-		return;
-	}
-
-	volume = MAX(volume,0);
-	volume = MIN(volume,1);
-
-	sources[source_id].volume=(ice_char)(volume*255);
-}
-
-void ice_audio_stream_flush() {
-	if (streams!=NULL) {
-		for (ice_uint i=0; i<MAX_STREAMS; i++) {
-			ice_audio_stream_delete(i);
-		}
-	}
-}
-
 ice_uint ice_audio_stream_load(
 	ice_uint file_id
 ) {
@@ -739,7 +728,7 @@ ice_uint ice_audio_stream_load(
 	char filename[32];
 	sprintf(
 		filename,
-		"%u.ogg",
+		"assets\\sounds\\%u.ogg",
 		(unsigned int)file_id
 	);
 
@@ -762,7 +751,7 @@ ice_uint ice_audio_stream_load(
 	}
 
 	stb_vorbis_info info = stb_vorbis_get_info(ogg_stream);
-	
+
 	if (info.sample_rate!=SAMPLE_RATE) {
 		ice_char msg[64];
 		sprintf(
@@ -814,6 +803,14 @@ void ice_audio_stream_delete(
 	stream->state      = ICE_AUDIO_STATE_NONE;
 }
 
+void ice_audio_stream_flush() {
+	if (streams!=NULL) {
+		for (ice_uint i=0; i<MAX_STREAMS; i++) {
+			ice_audio_stream_delete(i);
+		}
+	}
+}
+
 ice_real ice_audio_stream_length_get(
 	ice_uint stream_id
 ) {
@@ -829,7 +826,7 @@ ice_real ice_audio_stream_length_get(
 	return (ice_real)stream->length/stream->rate;
 }
 
-ice_real ice_audio_stream_position_get(
+ice_real ice_audio_stream_seek_get(
 	ice_uint stream_id
 ) {
 	if (
@@ -844,7 +841,7 @@ ice_real ice_audio_stream_position_get(
 	return (ice_real)stream->position/stream->rate;
 }
 
-void ice_audio_stream_position_set(
+void ice_audio_stream_seek_set(
 	ice_uint stream_id,
 	ice_real position
 ) {
@@ -870,6 +867,40 @@ void ice_audio_stream_position_set(
 		stream->ogg_stream,
 		stream->position
 	);
+}
+
+ice_real ice_audio_stream_volume_get(
+	ice_uint stream_id
+) {
+	if (
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return 0;
+	}
+
+	audio_stream *stream = &streams[stream_id];
+
+	return (ice_real)stream->volume/255;
+}
+
+void ice_audio_stream_volume_set(
+	ice_uint stream_id,
+	ice_real volume
+) {
+	if (
+		stream_id>=MAX_STREAMS ||
+		streams[stream_id].ogg_stream==NULL
+	) {
+		return;
+	}
+
+	audio_stream *stream = &streams[stream_id];
+
+	volume = MAX(volume,0);
+	volume = MIN(volume,1);
+
+	stream->volume=(ice_char)(volume*255);
 }
 
 ice_uint ice_audio_stream_state_get(
@@ -910,38 +941,4 @@ void ice_audio_stream_state_set(
 		default:
 			stream->state=ICE_AUDIO_STATE_PAUSED;
 	}
-}
-
-ice_real ice_audio_stream_volume_get(
-	ice_uint stream_id
-) {
-	if (
-		stream_id>=MAX_STREAMS ||
-		streams[stream_id].ogg_stream==NULL
-	) {
-		return 0;
-	}
-
-	audio_stream *stream = &streams[stream_id];
-
-	return (ice_real)stream->volume/255;
-}
-
-void ice_audio_stream_volume_set(
-	ice_uint stream_id,
-	ice_real volume
-) {
-	if (
-		stream_id>=MAX_STREAMS ||
-		streams[stream_id].ogg_stream==NULL
-	) {
-		return;
-	}
-
-	audio_stream *stream = &streams[stream_id];
-
-	volume = MAX(volume,0);
-	volume = MIN(volume,1);
-
-	stream->volume=(ice_char)(volume*255);
 }
