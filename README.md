@@ -1,32 +1,15 @@
 # ICE
 ![LICENSE](https://img.shields.io/badge/LICENSE-MIT-green.svg)
 
-ICE is a lite 3D game engine for DOS and other platforms.
+ICE is a lite cross-platform 3D game engine.
 
-**This project is still in early development and is not suitable for making games yet.**
-
-<img src="/screenshots/world.png?raw=true">
-
-## Features
-- Supports 3dfx Voodoo 3D hardware acceleration and software rendering
-- Supports Creative Sound Blaster and Covox Speech Thing
-- Supports full motion video and audio streaming MPEG1/Ogg
-- Supports mouse and keyboard
-
-## TODO
-- Redo mouse handling
-- Add scripting support
-- Add physics and animation system
-- Networking support
-- Documentation
+**This is the 2.0 development branch.**
 
 ## How to build
 Refer to [src/Makefile](src/Makefile) for build instructions
 
 ## How to use
-Refer to [ice.h](src/ice.h) for the API
-
-You can find examples in [demos](src/demos)
+Refer to [ice.h](src/ice.h) and [src/modules](src/modules) for the API
 
 ## License
 This software is free to use. You can modify it and redistribute it under the terms of the 
